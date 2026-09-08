@@ -61,7 +61,10 @@ and discard cancel pending requests; foreground stale requests are suppressed.
 
 Active workout, completed history, custom exercises, routines, preferences and the
 rest consumption marker share one versioned, atomic JSON file under Application
-Support/StrengthWorkouts/v1.json. Save failures are visible and prevent associated
+Support/StrengthWorkouts/v1.json. On iOS, the directory and document explicitly use
+protection until first user authentication, matching the background BLE database.
+They remain encrypted and become available after the first unlock since boot, including
+subsequent screen locks; existing valid documents are migrated on load. Save failures are visible and prevent associated
 side effects. Corrupt or newer-version data is not silently overwritten. This is
 separate from NOOP's SQLite database and existing `.noopbak` database exports.
 App updates retain the data; deleting the app deletes its local strength data.

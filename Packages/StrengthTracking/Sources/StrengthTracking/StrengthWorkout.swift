@@ -199,11 +199,34 @@ public struct StrengthFileStore {
     public init(url: URL) { self.url = url }
     public func load() throws -> StrengthState {
         guard FileManager.default.fileExists(atPath: url.path) else { return StrengthState() }
-        return try JSONDecoder().decode(StrengthState.self, from: Data(contentsOf: url)).validated()
+        let state = try JSONDecoder().decode(StrengthState.self, from: Data(contentsOf: url)).validated()
+        // Migrate existing installs while unlocked, before any locked countdown needs to commit.
+        try prepareDirectory()
+        return state
     }
     public func save(_ state: StrengthState) throws {
         let data = try JSONEncoder().encode(state.validated())
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try prepareDirectory()
+        #if os(iOS)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
         try data.write(to: url, options: .atomic)
+        #endif
+    }
+
+    private func prepareDirectory() throws {
+        let fm = FileManager.default
+        let directory = url.deletingLastPathComponent()
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        #if os(iOS)
+        // Like the BLE database: encrypted, available after first unlock since boot, including
+        // subsequent screen locks. Set the directory, existing document, and atomic replacement.
+        let protection: [FileAttributeKey: Any] =
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+        try fm.setAttributes(protection, ofItemAtPath: directory.path)
+        if fm.fileExists(atPath: url.path) {
+            try fm.setAttributes(protection, ofItemAtPath: url.path)
+        }
+        #endif
     }
 }

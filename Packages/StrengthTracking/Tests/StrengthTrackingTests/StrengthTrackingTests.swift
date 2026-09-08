@@ -219,4 +219,31 @@ final class StrengthTrackingTests: XCTestCase {
         state.rest?.sessionID = UUID()
         XCTAssertThrowsError(try state.validated())
     }
+
+    func testLoadingExistingWorkoutPreservesDocumentDuringAccessMigration() throws {
+        let disk = try store()
+        var state = workout()
+        complete(&state)
+        try FileManager.default.createDirectory(at: disk.url.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let original = try encoder.encode(state)
+        #if os(iOS)
+        try original.write(to: disk.url, options: [.atomic, .completeFileProtection])
+        #else
+        try original.write(to: disk.url, options: .atomic)
+        #endif
+        XCTAssertEqual(try disk.load(), state)
+        XCTAssertEqual(try Data(contentsOf: disk.url), original)
+        #if os(iOS) && !targetEnvironment(simulator)
+        // Simulator cannot establish real Data Protection behavior; check on an iPhone test host.
+        for path in [disk.url.deletingLastPathComponent(), disk.url] {
+            let attributes = try FileManager.default.attributesOfItem(atPath: path.path)
+            XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType,
+                .completeUntilFirstUserAuthentication)
+        }
+        #endif
+    }
+
 }
