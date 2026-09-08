@@ -107,4 +107,88 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: disk.url), data)
         XCTAssertNotNil(tracker.error)
     }
+
+    func testRuntimeCallbacksWithoutForegroundDeliverOnceAndPersist() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = {
+            XCTAssertEqual(try? disk.load().rest?.consumed, true)
+            attempts += 1
+        }
+        // No foreground lifecycle event: models timer / Bluetooth callbacks while locked.
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), uptime: 100)
+        tracker.runtimeTick(now: deadline, uptime: 101)
+        tracker.runtimeTick(now: deadline, uptime: 101)
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.5))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), uptime: 102)
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testSuspendedRuntimeDoesNotReplayInsideDeadlineGrace() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-10), uptime: 100)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 110.5)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), uptime: 111)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testUnlockConsumesMissedRestButNextRestCanBuzz() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), uptime: 100)
+        tracker.resumeForeground(now: deadline)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 101)
+        XCTAssertEqual(attempts, 0)
+        let movement = original.active!.movements[0]
+        tracker.change {
+            $0.undoSet(movementID: movement.id, setID: movement.sets[0].id)
+            $0.completeSet(movementID: movement.id, setID: movement.sets[0].id, now: deadline)
+        }
+        let next = tracker.state.rest!.deadline
+        tracker.runtimeTick(now: next.addingTimeInterval(-1), uptime: 190)
+        tracker.runtimeTick(now: next, uptime: 191)
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testRuntimeDisconnectedDeadlineCannotReplayOnReconnect() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        var connected = false
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), uptime: 100)
+        tracker.runtimeTick(now: deadline, uptime: 101)
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 101.5)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testRuntimeFirstCallbackAfterLaunchCannotReplay() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: original.rest!.deadline, uptime: 100)
+        tracker.runtimeTick(now: original.rest!.deadline.addingTimeInterval(0.5), uptime: 100.5)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
 }

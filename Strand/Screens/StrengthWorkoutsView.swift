@@ -195,11 +195,11 @@ struct StrengthWorkoutsView: View {
                 Toggle("WHOOP wrist cue", isOn: Binding(get: { tracker.state.wristAlert }, set: { enabled in
                     tracker.change { $0.wristAlert = enabled }
                 }))
-                Text("Optional and unverified on your strap. Also requires the Wrist alerts master in Automations. One cue attempt at zero while the app is active and WHOOP is connected. No catch-up buzz after reopening or reconnecting.")
+                Text("Also enable Wrist alerts in Automations. Attempts one cue while WHOOP is connected, including with the screen off while Bluetooth keeps the workout running. No catch-up buzz after reopening or reconnecting.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                 Toggle("Phone notification", isOn: Binding(get: { tracker.state.phoneAlert }, set: tracker.setPhoneAlert))
                 Text(tracker.notificationStatus).font(StrandFont.caption)
-                Text("iOS can suspend the app when locked or in the background. Enable phone notifications for those rests; a wrist cue is not guaranteed.")
+                Text("Screen-off wrist cues are best effort: iOS can pause or close the app. Enable phone notifications as a fallback. Keep NOOP Lab running; do not force-close it.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
             }
         }.font(StrandFont.body)

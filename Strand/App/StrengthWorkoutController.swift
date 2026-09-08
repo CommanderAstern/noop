@@ -18,7 +18,7 @@ final class StrengthWorkoutController: ObservableObject {
     @Published private(set) var restStatus: String?
     private let storage: StrengthFileStore
     private var readable = true
-    private var foreground = false
+    private var lastRuntimeTick: TimeInterval?
     private var suppressedRestID: UUID?
     private let platformServices: Bool
     private var ticker: AnyCancellable?
@@ -51,26 +51,16 @@ final class StrengthWorkoutController: ObservableObject {
         tick(allowWrist: false)
         guard platformServices else { return }
         #if os(iOS)
-        foreground = UIApplication.shared.applicationState == .active
         let activeName = UIApplication.didBecomeActiveNotification
-        let inactiveName = UIApplication.willResignActiveNotification
         #else
-        foreground = NSApplication.shared.isActive
         let activeName = NSApplication.didBecomeActiveNotification
-        let inactiveName = NSApplication.willResignActiveNotification
         #endif
         NotificationCenter.default.publisher(for: activeName).sink { [weak self] _ in
-            // Consume BEFORE marking active: reopening must never replay a background deadline.
-            self?.tick(allowWrist: false)
-            self?.foreground = true
+            self?.resumeForeground()
             self?.refreshNotificationStatus()
         }.store(in: &lifecycle)
-        NotificationCenter.default.publisher(for: inactiveName).sink { [weak self] _ in
-            self?.foreground = false
-        }.store(in: &lifecycle)
         ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect().sink { [weak self] _ in
-            guard let self else { return }
-            self.tick(allowWrist: self.foreground)
+            self?.runtimeTick()
         }
         synchronizeNotification()
         removeOrphanedNotifications()
@@ -97,6 +87,21 @@ final class StrengthWorkoutController: ObservableObject {
             synchronizeNotification(previous: old.rest)
         }
         return true
+    }
+
+    /// The workout's HR stream can wake us through the existing bluetooth-central mode.
+    /// A timer or HR callback may attempt the cue with the screen off, but only if execution
+    /// stayed fresh. A delayed callback after suspension consumes the rest without buzzing.
+    func runtimeTick(now: Date = Date(), uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        let gap = lastRuntimeTick.map { uptime - $0 }
+        lastRuntimeTick = uptime
+        tick(allowWrist: gap.map { $0 >= 0 && $0 <= 2 } ?? false, now: now)
+    }
+
+    func resumeForeground(now: Date = Date()) {
+        // Never replay a deadline on unlocking, even if it falls inside the two-second grace.
+        lastRuntimeTick = nil
+        tick(allowWrist: false, now: now)
     }
 
     func tick(allowWrist: Bool, now: Date = Date()) {
