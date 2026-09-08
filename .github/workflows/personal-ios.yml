@@ -3,22 +3,24 @@ name: NOOP Lab iPhone release
 on:
   push:
     branches: [personal]
+  pull_request:
+    branches: [personal]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: noop-lab-release
+  group: noop-lab-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
   iphone:
-    if: github.repository == 'CommanderAstern/noop' && github.ref == 'refs/heads/personal'
+    if: github.repository == 'CommanderAstern/noop' && (github.ref == 'refs/heads/personal' || github.event_name == 'pull_request')
     runs-on: macos-26
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
     env:
       VERSION: 1.${{ github.run_number }}.${{ github.run_attempt }}
       GH_TOKEN: ${{ github.token }}
@@ -31,6 +33,9 @@ jobs:
       - name: Test strap protocol
         run: swift test --package-path Packages/WhoopProtocol
 
+      - name: Test strength persistence and rest timer
+        run: swift test --package-path Packages/StrengthTracking
+
       - name: Test analytics
         run: swift test --package-path Packages/StrandAnalytics
 
@@ -38,6 +43,18 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
+
+      - name: Test workout app integration
+        run: |
+          xcodebuild -scheme Strand -configuration Debug -destination 'platform=macOS' \
+            -derivedDataPath build/strength-tests CODE_SIGNING_ALLOWED=NO \
+            -only-testing:StrandTests/StrengthWorkoutControllerTests \
+            -only-testing:StrandTests/ActiveWorkoutPersistenceTests \
+            -only-testing:StrandTests/ActiveWorkoutClockTests \
+            test > "$RUNNER_TEMP/noop-strength-tests.log" 2>&1 || {
+              tail -n 100 "$RUNNER_TEMP/noop-strength-tests.log"
+              exit 1
+            }
 
       - name: Build iPhone app and widgets
         run: |
@@ -65,6 +82,28 @@ jobs:
             "dist/NOOP-Lab-${VERSION}.ipa" dist/altstore-source.json
           (cd dist && shasum -a 256 "NOOP-Lab-${VERSION}.ipa" > SHA256SUMS.txt)
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noop-lab-iphone
+          path: |
+            dist/*.ipa
+            dist/altstore-source.json
+            dist/SHA256SUMS.txt
+
+  publish:
+    needs: iphone
+    if: github.repository == 'CommanderAstern/noop' && github.ref == 'refs/heads/personal' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: 1.${{ github.run_number }}.${{ github.run_attempt }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: noop-lab-iphone
+          path: dist
       - name: Publish the verified build and SideStore source
         run: |
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
@@ -75,7 +114,16 @@ jobs:
           Add this source in SideStore:
           https://github.com/CommanderAstern/noop/releases/latest/download/altstore-source.json
 
-          Includes protocol and analytics test checks, an iPhone Release build, widgets, and an unsigned IPA for SideStore signing.
+          Strength tracker: exercises and gym machines, custom entries, sets/reps/kg/lb, routines,
+          durable sessions and history, configurable rest countdowns, optional WHOOP wrist cues
+          and phone notifications. No proprietary muscular-strain calculation.
+
+          Wrist cues use one supported haptic command and require real-strap testing. iOS background
+          rests use the optional phone notification; missed wrist cues are never replayed.
+          See docs/STRENGTH_TRACKER.md in the repository for installation and acceptance checks.
+
+          Includes protocol, analytics, strength persistence/timer and workout integration checks,
+          an iPhone Release build, widgets, and an unsigned IPA for SideStore signing.
           Keep older releases for rollback. Export a backup inside NOOP before testing changes.
           EOF
           gh release create "v${VERSION}" \
@@ -84,3 +132,20 @@ jobs:
             --title "NOOP Lab ${VERSION}" --notes-file "$RUNNER_TEMP/release-notes.md" \
             --draft
           gh release edit "v${VERSION}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+  screenshots:
+    if: github.repository == 'CommanderAstern/noop' && github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Capture actual iPhone simulator screens
+        run: bash Tools/personal/screenshot-strength.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strength-iphone-screenshots
+          path: build/strength-screenshots/*.png

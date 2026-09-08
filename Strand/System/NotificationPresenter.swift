@@ -28,6 +28,13 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        if notification.request.identifier.hasPrefix(StrengthWorkoutController.notificationPrefix) {
+            Task { @MainActor in
+                let accepted = AppModel.shared?.strengthWorkouts.acceptsNotification(notification.request.identifier) == true
+                completionHandler(accepted ? [.banner, .sound, .list] : [])
+            }
+            return
+        }
         completionHandler([.banner, .sound, .list])
     }
 

@@ -24,23 +24,26 @@ is an app update; it does not extend the signing lifetime indefinitely.
 
 ## Make a change
 
-Open this repository folder in your editor, and work on `personal`:
+Open this repository folder in your editor. Start from `personal`, then make a feature branch:
 
 ```powershell
 git switch personal
+git pull --ff-only origin personal
+git switch -c codex/my-change
 git status
 # Edit and review your changes.
 python -m unittest discover -s Tools/personal -p 'test_*.py' -v
 git diff --check
 git add <the-files-you-changed>
 git commit -m "Describe your change"
-git push origin personal
+git push -u origin HEAD
+gh pr create --base personal
 ```
 
 The **NOOP Lab iPhone release** workflow tests the protocol and analytics,
 builds the app on GitHub's macOS runner, checks the app/widget identities,
 and publishes an IPA, checksum, and SideStore source only after success.
-Every push to `personal` starts a build. You can also use GitHub Actions'
+PRs targeting `personal` run the build without publishing. A merge into `personal` starts the release build. You can also use GitHub Actions'
 Run workflow button on `personal`. Windows edits the Swift files; the Mac
 runner compiles them. iPhone hardware testing still happens on your phone.
 
@@ -84,3 +87,23 @@ This preserves history and produces a newer version SideStore can offer.
 The app remains native and stores strap data locally. This setup distributes
 builds over the internet; it does not add cloud health-data sync or remotely
 executed screens.
+
+## Required AI review before merging
+
+The personal branch uses a GitHub ruleset requiring pull requests, passing `iphone`
+CI and the `codex-review` status, with no bypass actors. Codex reviews every PR and
+new push. As in Inkbook, the gate verifies the authenticated Codex App summary refers
+to the current commit, and all review threads must be resolved. A previous commit's
+review, a human-authored summary, a label or a failed/in-progress review cannot pass.
+
+The gate runs trusted code from `personal`, never PR scripts with a write token.
+After resolving a finding, re-run **Codex review gate** with the PR number if GitHub
+has not emitted a comment/review event. New code needs a new connected AI review.
+The initial installation can run `python Tools/personal/review_gate.py --pr N --publish`
+locally after the connected review, because the workflow does not exist on the base
+until that first reviewed PR merges. This still validates real GitHub review metadata;
+do not manually mark a missing review successful.
+
+The existing local upstream check remains local-only and is not duplicated. Any
+upstream merge to publish must also go through a PR into `personal` and the same gates.
+See [the strength tracker guide](STRENGTH_TRACKER.md) for workflow and iPhone tests.

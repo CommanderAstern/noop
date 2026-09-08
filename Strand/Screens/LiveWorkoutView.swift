@@ -64,6 +64,7 @@ struct LiveWorkoutView: View {
                 // standard fitness sensor is feeding metrics, refreshing on its own packets without
                 // re-rendering the HR hero / effort gauge above (scroll-stutter isolation).
                 SensorRowIfPresent()
+                StrengthWorkoutEntryView(tracker: model.strengthWorkouts)
             }
             .screenPadding()
             .padding(.vertical, NoopMetrics.space6)

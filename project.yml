@@ -48,6 +48,8 @@ packages:
     exactVersion: 2.4.1
   WhoopProtocol:
     path: Packages/WhoopProtocol
+  StrengthTracking:
+    path: Packages/StrengthTracking
   WhoopStore:
     path: Packages/WhoopStore
   StrandAnalytics:
@@ -149,6 +151,7 @@ targets:
       - package: WhoopProtocol
       - package: WhoopStore
       - package: StrandAnalytics
+      - package: StrengthTracking
       - package: StrandImport
       - package: StrandDesign
       - package: MarkdownUI
@@ -342,6 +345,7 @@ targets:
       - package: WhoopProtocol
       - package: WhoopStore
       - package: StrandAnalytics
+      - package: StrengthTracking
       - package: StrandImport
       - package: StrandDesign
       - package: MarkdownUI
@@ -457,6 +461,7 @@ targets:
     dependencies:
       - package: StrandDesign
       - package: StrandAnalytics
+      - package: StrengthTracking
       # The complication WidgetKit extension is embedded inside the watch app.
       - target: NOOPWatchComplications
 

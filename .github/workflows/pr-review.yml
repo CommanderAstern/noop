@@ -1,0 +1,45 @@
+name: Codex review gate
+
+on:
+  pull_request_target:
+    branches: [personal]
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  issue_comment:
+    types: [created, edited, deleted]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request to recheck after resolving findings
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: >-
+      github.repository == 'CommanderAstern/noop' &&
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    steps:
+      # Privileged job: ONLY trusted personal policy, never PR head code or interpolated PR text.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: personal
+          persist-credentials: false
+      - name: Validate connected Codex review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
+        run: python3 Tools/personal/review_gate.py --pr "$PR_NUMBER" --publish

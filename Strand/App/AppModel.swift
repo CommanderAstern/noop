@@ -84,6 +84,8 @@ final class AppModel: ObservableObject {
     /// since; on End the window is scored via `StrainScorer` and saved as a `WorkoutRow` (source
     /// "manual"), which then shows in the Workouts view. The day's strain already counts this HR (it's
     /// the same live stream the store persists), so this is a per-session annotation, not a double-count.
+    let strengthWorkouts = StrengthWorkoutController()
+
     @Published var activeWorkout: ActiveWorkout?
     /// The just-ended workout, for a brief inline confirmation on Live (cleared on the next start).
     @Published var lastWorkout: WorkoutRow?
@@ -221,6 +223,8 @@ final class AppModel: ObservableObject {
         self.repo = Repository(deviceId: deviceId)
         self.coach = AICoachEngine(repo: repo)
         self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: deviceId)
+        strengthWorkouts.strapReady = { [weak self] in self?.ble.strengthRestCueReady == true }
+        strengthWorkouts.buzz = { [weak self] in self?.ble.buzzStrengthRestOnce() }
         // Route the engine's per-day scoring diagnostic into the SAME shareable strap log every other
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
         // was computed per day. `live` is captured strongly (created just above) , the engine outlives the
