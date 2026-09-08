@@ -267,6 +267,7 @@ private struct StrengthSetRow: View {
     let unit: LiftingUnit
     @State private var reps: String
     @State private var weight: String
+    @State private var weightWasEdited = false
 
     init(tracker: StrengthWorkoutController, movementID: UUID, set: StrengthSet, number: Int, unit: LiftingUnit) {
         self.tracker = tracker; self.movementID = movementID; self.set = set; self.number = number; self.unit = unit
@@ -310,7 +311,9 @@ private struct StrengthSetRow: View {
                 }
                 HStack {
                     Button("Complete set") {
-                        guard let reps = parsedReps, let kilograms = parsedWeight else { return }
+                        guard let reps = parsedReps, let enteredKilograms = parsedWeight else { return }
+                        // Merely displaying a rounded unit conversion must not rewrite the load.
+                        let kilograms = weightWasEdited ? enteredKilograms : set.kilograms
                         tracker.change { $0.recordSet(movementID: movementID, setID: set.id,
                             reps: reps, kilograms: kilograms, now: Date()) }
                     }
@@ -325,7 +328,10 @@ private struct StrengthSetRow: View {
             }
         }
         .onChange(of: reps) { _ in if let value = parsedReps { edit { $0.reps = value } } }
-        .onChange(of: weight) { _ in if let value = parsedWeight { edit { $0.kilograms = value } } }
+        .onChange(of: weight) { _ in
+            weightWasEdited = true
+            if let value = parsedWeight { edit { $0.kilograms = value } }
+        }
     }
     private func edit(_ update: (inout StrengthSet) -> Void) {
         tracker.change { state in

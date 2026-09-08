@@ -2567,7 +2567,7 @@ struct SettingsView: View {
         SettingsSection(
             icon: "externaldrive.fill",
             title: "Backup & restore",
-            blurb: "Move all your NOOP data to another machine. Export saves everything (history, sleeps, workouts, settings) to a single file you can copy across; import replaces \(Platform.deviceNounPhrase)'s data with a backup."
+            blurb: "Move your NOOP database and settings to another machine. Export includes heart-rate history, sleeps and activities. Strength workouts and routines are separate and are not exported or restored. Import replaces \(Platform.deviceNounPhrase)'s database with a backup."
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.space4) {
                 // Three labelled buttons must share a narrow iPhone row without wrapping mid-word
@@ -2616,7 +2616,7 @@ struct SettingsView: View {
                         .foregroundStyle(StrandPalette.textTertiary)
                         .font(.system(size: 13))
                         .accessibilityHidden(true)
-                    Text("Importing overwrites everything currently on \(Platform.deviceNounPhrase). Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect. Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into NOOP on Mac, iPhone, or Android. On-device computed rows are marked APPROXIMATE in its Source column; the full backup stays the lossless restore path.")
+                    Text("Importing overwrites the current database and exported settings on \(Platform.deviceNounPhrase). Your old data is kept in a side file just in case. NOOP needs a relaunch for an import to take effect. Export CSV writes a WHOOP-format zip of your days, sleeps, workouts and journal that re-imports into NOOP on Mac, iPhone, or Android. On-device computed rows are marked APPROXIMATE in its Source column; the database backup preserves those rows and settings. Strength data is not included and remains unchanged on import.")
                         .font(StrandFont.footnote)
                         .foregroundStyle(StrandPalette.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
