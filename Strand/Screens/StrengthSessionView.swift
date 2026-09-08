@@ -140,7 +140,7 @@ struct StrengthSessionView: View {
             if let next = session.nextSet {
                 if session.openRest == nil { StrengthExerciseArt(exercise: next.movement.exercise).frame(height: 80) }
                 Text(next.movement.exercise.name).font(.title2.bold()).multilineTextAlignment(.center)
-                Text(next.set.kind == .warmup ? "Warm-up set" : "Working set \(next.movement.sets.filter { $0.kind == .working }.firstIndex(where: { $0.id == next.set.id }).map { $0 + 1 } ?? 1)")
+                Text(next.set.kind == .warmup ? "Warm-up set" : "Working set \((next.movement.ordinal(of: next.set.id) ?? 0) + 1)")
                     .foregroundStyle(StrandPalette.textSecondary)
                 Button { edit = SetSelection(movement: next.movement, set: next.set) } label: {
                     HStack { StrengthStat(value: strengthWeight(next.set.kilograms, unit: session.unit), label: session.unit.rawValue); Spacer(); StrengthStat(value: "\(next.set.reps)", label: "reps"); Image(systemName: "pencil") }
@@ -172,14 +172,16 @@ struct StrengthSessionView: View {
             }
             HStack { Text("SET").frame(width: 30); Text("PREVIOUS").frame(maxWidth: .infinity); Text(session.unit.rawValue.uppercased()).frame(width: 58); Text("REPS").frame(width: 45); Text("✓").frame(width: 44) }
                 .font(.caption2).foregroundStyle(StrandPalette.textSecondary)
-            ForEach(Array(movement.sets.enumerated()), id: \.element.id) { index, set in
+            ForEach(movement.sets) { set in
+                let number = (movement.ordinal(of: set.id) ?? 0) + 1
+                let setLabel = set.kind == .warmup ? "warm-up set \(number)" : "working set \(number)"
                 HStack(spacing: 4) {
-                    Text(set.kind == .warmup ? "W" : "\(index + 1)").frame(width: 30)
+                    Text(set.kind == .warmup ? "W" : "\(number)").frame(width: 30)
                     Text(tracker.state.previousSet(for: movement.exercise, kind: set.kind, ordinal: session.ordinal(of: set.id) ?? 0).map { "\(strengthWeight($0.kilograms, unit: session.unit)) × \($0.reps)" } ?? "—")
                         .font(.caption).foregroundStyle(StrandPalette.textSecondary).frame(maxWidth: .infinity)
                     Button { edit = SetSelection(movement: movement, set: set) } label: {
                         HStack { Text(strengthWeight(set.kilograms, unit: session.unit)).frame(width: 58); Text("\(set.reps)").frame(width: 45) }.frame(minHeight: 44)
-                    }.buttonStyle(.plain).accessibilityLabel("Edit set \(index + 1), \(set.reps) reps, \(strengthWeight(set.kilograms, unit: session.unit)) \(session.unit.rawValue)")
+                    }.buttonStyle(.plain).accessibilityLabel("Edit \(setLabel), \(set.reps) reps, \(strengthWeight(set.kilograms, unit: session.unit)) \(session.unit.rawValue)")
                     if set.completedAt != nil {
                         Menu {
                             Button("Undo completion") { tracker.change { $0.undoSet(movementID: movement.id, setID: set.id) } }
@@ -188,7 +190,7 @@ struct StrengthSessionView: View {
                     } else {
                         Button { tracker.change { $0.completeSet(movementID: movement.id, setID: set.id, now: Date()) } } label: {
                             Image(systemName: "square").frame(width: 44, height: 44)
-                        }.accessibilityLabel("Complete set \(index + 1)")
+                        }.accessibilityLabel("Complete \(setLabel)")
                     }
                 }.font(.subheadline.monospacedDigit()).background(set.completedAt != nil ? StrandPalette.accent.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             }

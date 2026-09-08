@@ -103,6 +103,38 @@ final class StrengthFlowTests: XCTestCase {
         current.active!.movements.append(extra)
         XCTAssertEqual(current.active!.ordinal(of: extra.sets[0].id), 3)
     }
+    func testPartialHistoryPreservesWorkingPlansAndCompletedOrdinals() {
+        let exercise = StrengthExercise.catalog[1]
+        var older = state()
+        for index in 0..<3 { complete(&older, index, Double(index * 150 + 30)) }
+        older.finish(now: now.addingTimeInterval(600))
+        var recent = state(); recent.active!.startedAt = now.addingTimeInterval(1000)
+        recent.active!.movements[0].sets[2].kilograms = 75
+        complete(&recent, 2, 1100)
+        recent.finish(now: now.addingTimeInterval(1200))
+        recent.history += older.history
+        // Skipping working row one must not relabel row two as the first prior set.
+        XCTAssertEqual(recent.previousSet(for: exercise, ordinal: 0)?.kilograms, 60)
+        XCTAssertEqual(recent.previousSet(for: exercise, ordinal: 1)?.kilograms, 75)
+        XCTAssertEqual(recent.suggestedSets(for: exercise).map(\.kilograms), [20, 60, 75])
+        XCTAssertTrue(recent.suggestedSets(for: exercise).allSatisfy { $0.completedAt == nil && $0.startedAt == nil })
+        // A newer workout containing only a warm-up leaves the older work accessible.
+        var warmOnly = state(); warmOnly.active!.startedAt = now.addingTimeInterval(2000)
+        warmOnly.active!.movements[0].sets = [warmOnly.active!.movements[0].sets[0]]
+        complete(&warmOnly, 0, 2100); warmOnly.finish(now: now.addingTimeInterval(2200))
+        XCTAssertEqual(warmOnly.suggestedSets(for: exercise).filter { $0.kind == .working }.count, 3)
+        warmOnly.history += recent.history
+        XCTAssertEqual(warmOnly.previousSet(for: exercise, ordinal: 0)?.kilograms, 60)
+        XCTAssertEqual(warmOnly.previousSet(for: exercise, ordinal: 1)?.kilograms, 75)
+        XCTAssertEqual(warmOnly.suggestedSets(for: exercise).map(\.kilograms), [20, 60, 75])
+    }
+    func testMovementNumbersWorkingSetsIndependentlyOfWarmups() {
+        var movement = state().active!.movements[0]
+        var extraWarmup = StrengthSet(); extraWarmup.kind = .warmup
+        movement.sets.insert(extraWarmup, at: 2)
+        XCTAssertEqual(movement.sets.map { movement.ordinal(of: $0.id) }, [0, 0, 1, 1])
+        XCTAssertNil(movement.ordinal(of: UUID()))
+    }
     func testOldSchemaDefaultsWithoutFabricatingHistory() throws {
         var original = state(); original.version = 1
         let data = try JSONEncoder().encode(original)

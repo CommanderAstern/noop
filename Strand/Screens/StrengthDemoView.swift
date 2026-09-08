@@ -32,7 +32,12 @@ struct StrengthDemoView: View {
         let routine = StrengthRoutine(name: "Upper body A", movements: state.history[0].movements, restSeconds: 90, unit: .kg)
         state.routines = [routine]
         if ["active", "rest", "exercises", "picker", "warmup"].contains(mode) {
-            state.start(routine: routine, now: now.addingTimeInterval(-300))
+            var activeRoutine = routine
+            if mode == "exercises" {
+                var warmup = StrengthSet(reps: 12, kilograms: 20); warmup.kind = .warmup
+                activeRoutine.movements[0].sets.insert(warmup, at: 0)
+            }
+            state.start(routine: activeRoutine, now: now.addingTimeInterval(-300))
             let movement = state.active!.movements[0]
             if mode == "warmup" {
                 state.active!.movements[0].sets[0].kind = .warmup

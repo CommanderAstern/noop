@@ -2,6 +2,14 @@ import Foundation
 
 public enum StrengthSetKind: String, Codable, CaseIterable { case warmup, working }
 
+extension StrengthMovement {
+    /// Zero-based position among this movement's sets of the same kind.
+    public func ordinal(of setID: UUID) -> Int? {
+        guard let set = sets.first(where: { $0.id == setID }) else { return nil }
+        return sets.filter { $0.kind == set.kind }.firstIndex { $0.id == setID }
+    }
+}
+
 public struct StrengthRestInterval: Codable, Equatable, Identifiable {
     public enum EndReason: String, Codable { case nextSet, finished, unknownStart, correction }
     public var id = UUID()
@@ -91,21 +99,30 @@ extension StrengthState {
         undoSet(movementID: last.0, setID: last.1.id)
     }
 
-    public func previousSets(for exercise: StrengthExercise) -> [StrengthSet] {
-        for session in history.sorted(by: { $0.startedAt > $1.startedAt }) {
-            let sets = session.movements.filter { $0.exercise.id == exercise.id }.flatMap(\.sets)
-                .filter { $0.completedAt != nil }
-            if !sets.isEmpty { return sets }
+    private func priorTargets(for exercise: StrengthExercise) -> [[StrengthSet]] {
+        history.sorted(by: { $0.startedAt > $1.startedAt }).map { session in
+            session.movements.filter { $0.exercise.id == exercise.id }.flatMap(\.sets)
         }
-        return []
     }
     public func previousSet(for exercise: StrengthExercise, kind: StrengthSetKind = .working, ordinal: Int = 0) -> StrengthSet? {
-        let sets = previousSets(for: exercise).filter { $0.kind == kind }
-        return sets.indices.contains(ordinal) ? sets[ordinal] : nil
+        for targets in priorTargets(for: exercise) {
+            // Preserve the ordinal of skipped/unfinished rows; only completed values
+            // qualify as previous performance, and missing values fall back in history.
+            let sets = targets.filter { $0.kind == kind }
+            if sets.indices.contains(ordinal), sets[ordinal].completedAt != nil { return sets[ordinal] }
+        }
+        return nil
     }
     public func suggestedSets(for exercise: StrengthExercise) -> [StrengthSet] {
-        let previous = previousSets(for: exercise)
-        return previous.isEmpty ? [StrengthSet(), StrengthSet(), StrengthSet()] : previous.map { $0.fresh() }
+        let prior = priorTargets(for: exercise)
+        // Reuse the whole plan of a used movement, including unfinished targets.
+        // A warm-up-only movement must not erase an earlier working-set plan.
+        if let plan = prior.first(where: { $0.contains { $0.completedAt != nil } && $0.contains { $0.kind == .working } }) {
+            return plan.map { $0.fresh() }
+        }
+        let warmups = prior.first(where: { $0.contains { $0.completedAt != nil } })?
+            .filter { $0.kind == .warmup && $0.completedAt != nil }.map { $0.fresh() } ?? []
+        return warmups + [StrengthSet(), StrengthSet(), StrengthSet()]
     }
 
     public mutating func addExercise(_ exercise: StrengthExercise) {

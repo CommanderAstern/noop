@@ -124,3 +124,13 @@ the automated model tests do not claim to simulate those system frameworks.
     (`StrandiOS/App/StrengthSheetHandoff.swift:17`, focused follow-up). Cache the host's
     own window weakly while attached, so the same scene's presenter remains available
     under a full-screen cover. Never select another scene's key window.
+29. **P2 — Partial sessions hide older working targets**
+    (`Packages/StrengthTracking/Sources/StrengthTracking/StrengthFlow.swift:98`,
+    GitHub Codex review of `ba865a6`). Previous performance searches older sessions
+    for the requested kind and original ordinal without collapsing skipped rows.
+    Suggestions preserve the full plan of a used movement; warm-up-only history
+    falls back to earlier working plans or default working sets. Tests cover both.
+30. **P2 — Warm-ups offset working-set numbers in the exercise table**
+    (`Strand/Screens/StrengthSessionView.swift:177`, same review). Live, table and
+    accessibility labels now share the movement's same-kind ordinal. A regression
+    includes interleaved warm-ups and working sets.
