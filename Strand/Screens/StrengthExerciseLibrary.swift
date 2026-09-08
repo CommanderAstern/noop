@@ -42,11 +42,20 @@ struct StrengthExerciseArt: View {
                 line([.init(x: 35, y: 74), .init(x: 35, y: 88)])
                 for y in stride(from: 50, through: 78, by: 7) { line([.init(x: 80, y: y), .init(x: 102, y: y)], width: 4) }
             } else if equipment.contains("barbell") || equipment.contains("smith") {
-                bar(60, 27)
-                line([.init(x: 18, y: 31), .init(x: 18, y: 85)])
-                line([.init(x: 28, y: 64), .init(x: 92, y: 64)], width: 9)
-                line([.init(x: 38, y: 68), .init(x: 34, y: 89)])
-                line([.init(x: 85, y: 68), .init(x: 94, y: 89)])
+                if exercise.name.localizedCaseInsensitiveContains("bench") {
+                    bar(60, 27)
+                    line([.init(x: 18, y: 31), .init(x: 18, y: 85)])
+                    line([.init(x: 28, y: 64), .init(x: 92, y: 64)], width: 9)
+                    line([.init(x: 38, y: 68), .init(x: 34, y: 89)])
+                    line([.init(x: 85, y: 68), .init(x: 94, y: 89)])
+                } else if exercise.name.localizedCaseInsensitiveContains("squat") || exercise.name.localizedCaseInsensitiveContains("press") {
+                    bar(60, 30)
+                    line([.init(x: 25, y: 12), .init(x: 25, y: 88), .init(x: 12, y: 88)])
+                    line([.init(x: 95, y: 12), .init(x: 95, y: 88), .init(x: 108, y: 88)])
+                } else {
+                    bar(60, 62)
+                    line([.init(x: 24, y: 79), .init(x: 96, y: 79)], width: 2)
+                }
             } else if equipment.contains("bodyweight") {
                 let head = Path(ellipseIn: CGRect(x: 51, y: 9, width: 18, height: 18))
                 context.fill(head, with: .color(StrandPalette.textSecondary))

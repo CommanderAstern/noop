@@ -92,13 +92,13 @@ struct StrengthSessionView: View {
     }
 
     private func live(_ session: StrengthSession) -> some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let reading = tracker.liveReading()
-                VStack(spacing: 10) {
+                VStack(spacing: 7) {
                     Text("HEART RATE").font(.caption).tracking(2).foregroundStyle(StrandPalette.textSecondary)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(reading.bpm.map(String.init) ?? "—").font(.system(size: 68, weight: .bold, design: .rounded)).monospacedDigit()
+                        Text(reading.bpm.map(String.init) ?? "—").font(.system(size: session.openRest == nil ? 56 : 44, weight: .bold, design: .rounded)).monospacedDigit()
                         Text("bpm").foregroundStyle(StrandPalette.textSecondary)
                     }
                     Text(reading.zone.map { $0 == 0 ? "Below Zone 1" : "Zone \($0) · \(["", "Very light", "Light", "Moderate", "Hard", "Maximum"][$0])" } ?? "Waiting for live heart rate")
@@ -120,17 +120,17 @@ struct StrengthSessionView: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     let elapsed = max(0, Int(context.date.timeIntervalSince(open.startedAt)))
                     let remaining = tracker.state.rest?.remaining(at: context.date) ?? 0
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         Text(remaining > 0 ? "REST REMAINING" : "REST COMPLETE").font(.caption).tracking(2)
                         Text(remaining > 0 ? strengthTime(remaining) : "+\(strengthTime(max(0, elapsed - open.plannedSeconds)))")
-                            .font(.system(size: 60, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(StrandPalette.accent)
+                            .font(.system(size: 48, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(StrandPalette.accent)
                         HStack { StrengthStat(value: strengthTime(open.plannedSeconds), label: "Planned"); Spacer(); StrengthStat(value: strengthTime(elapsed), label: "Rested so far") }
                         Text(tracker.restStatus ?? (tracker.state.wristAlert ? "Wrist cue enabled" : "Wrist cue off")).font(.caption).foregroundStyle(StrandPalette.textSecondary)
-                    }.padding(.vertical, 8)
+                    }.padding(.vertical, 4)
                 }
             }
             if let next = session.nextSet {
-                if session.openRest == nil { StrengthExerciseArt(exercise: next.movement.exercise).frame(height: 150) }
+                if session.openRest == nil { StrengthExerciseArt(exercise: next.movement.exercise).frame(height: 80) }
                 Text(next.movement.exercise.name).font(.title2.bold()).multilineTextAlignment(.center)
                 Text(next.set.kind == .warmup ? "Warm-up set" : "Working set \(next.movement.sets.filter { $0.kind == .working }.firstIndex(where: { $0.id == next.set.id }).map { $0 + 1 } ?? 1)")
                     .foregroundStyle(StrandPalette.textSecondary)
