@@ -1,28 +1,38 @@
 # Strength workouts in NOOP Lab
 
-Open **Workouts → Open strength tracker**. The same entry is available inside the
+Open **Workouts → Open workouts**. The same entry is available inside the
 live heart-rate workout screen. Strength sessions are independent of the existing
 heart-rate activity log: no strap or heart-rate samples are needed to save a lift.
 
 ## Workflow
 
-1. Start a strength workout, or start from a saved routine.
+1. **Train** contains saved training days and editable Upper, Push, Pull and Leg
+   starting templates. Set your own weights, or start an empty workout.
 2. Add an exercise or gym machine. Search by exercise/equipment, or create a custom
    name and equipment label (for example, "Chest press" / "Gym machine 4").
 3. Enter reps and weight for each set. Use kg or lb. Zero means no external load;
    use a consistent convention for pairs of dumbbells (such as combined weight).
-4. Tap **Complete set** once. This saves completion and starts the configured rest
-   countdown. Add more sets as needed. Undo cancels that set's current rest.
-5. Rest defaults to 90 seconds, adjustable in 15-second increments up to 30 minutes.
-   Zero disables auto-rest. Duration changes apply to the next completed set.
-   Skip cancels the current rest. Completing another set replaces it.
-6. Save the current exercise order and set targets as a reusable routine. Routine
-   reuse makes new session/set IDs and clears all completion marks.
-7. Finish and save to **Strength history**. Unfinished sets stay explicitly marked
-   as not completed. Closing the screen keeps the workout running and saved.
+4. **Live** shows current BPM and your configured HR zones, with one Start/Complete
+   button. Start a warm-up or working set, then complete it to begin rest. There is
+   no HR graph during training. **Exercises** contains the full set table and targets.
+5. Adjust rest only within an exercise (0–30 minutes, in 15-second increments).
+   Changes affect future sets. Start the next set to end rest early or after overtime.
+   Zero disables the countdown but still records elapsed rest. Actual rest ends at
+   an explicit next-set start, not at countdown zero. A completion without a recorded
+   start cannot establish actual rest and is marked unknown.
+6. Use **•••** for Undo last set, editing completed sets and notes. Undo cancels
+   the affected countdown and marks affected timing as unknown. Reusable templates
+   preserve targets, warm-ups and exercise rest settings but clear timing and completion.
+7. **Minimize workout** stays at the bottom. The app-wide resume bar preserves the
+   session across tabs. Dynamic Island and Lock Screen show the rest clock and next
+   exercise, with Open workout; they do not contain rest adjustments or BLE actions.
+8. Finish to see the summary, then revisit **History** or compare same-rep working
+   loads in **Progress**. Unfinished sets remain explicitly incomplete. Personal
+   records compare the same exercise identity against earlier sessions, excluding
+   warm-ups, ties and first observations. Distinguish different machines by name.
 
-Valid numeric edits save as they are typed. Invalid or incomplete text is marked
-and cannot complete a set; invalid text is not persisted. kg is the canonical unit,
+Numeric edits use an explicit Save action. Invalid or incomplete text cannot be
+saved. kg is the canonical unit,
 so changing the display unit does not change recorded load.
 
 ## Rest alerts
@@ -54,7 +64,7 @@ Enable **Phone notification** and allow notifications for fallback while the app
 locked, suspended or terminated. iOS delivers the nonrepeating local notification;
 it does not grant the app guaranteed execution to send BLE at the deadline. Focus,
 notification permissions and phone sound settings can affect presentation. OS-delayed
-notification presentation is outside the app's control. Skip, replacement, finish
+notification presentation is outside the app's control. Next-set start, undo, replacement, finish
 and discard cancel pending requests; foreground stale requests are suppressed.
 
 ## Persistence
@@ -68,6 +78,14 @@ subsequent screen locks; existing valid documents are migrated on load. Save fai
 side effects. Corrupt or newer-version data is not silently overwritten. This is
 separate from NOOP's SQLite database and existing `.noopbak` database exports.
 App updates retain the data; deleting the app deletes its local strength data.
+
+The document now uses schema v2 at the existing path. Before the first v2 write,
+the original v1 bytes are retained once as `before-v2.json` with the same encrypted
+protection. Older binaries reject v2 rather than overwriting it; an app downgrade
+does not automatically restore the backup. Existing active countdown IDs and
+consumption survive upgrade. Legacy sessions retain unknown/partial rest coverage;
+NOOP never invents earlier rest or exercise start times. User photos are resized
+to a local thumbnail; built-in illustrations are original schematic equipment art.
 
 ## Research and boundaries
 
@@ -95,7 +113,7 @@ Do not delete the app to update it. Keep the working version available for rollb
   set. Keep the app active. Verify one wrist cue at zero and none for another minute.
   If the strap ignores it, use phone alerts and report strap model/firmware.
 - Start rest, navigate to another tab, and keep the app active. Check one cue at zero.
-- Start rest and then Skip, Undo, complete another set, Finish, or Discard. Check that
+- Start rest and then start the next set, Undo, complete another set, Finish, or Discard. Check that
   no cancelled countdown cues arrive.
 - Repeat with 15-, 90- and 180-second rests: lock the phone immediately after completing
   a set, keep WHOOP nearby, and check for one wrist cue at zero with no repeats. Also
@@ -104,7 +122,7 @@ Do not delete the app to update it. Keep the working version available for rollb
 - Disconnect WHOOP before zero, reconnect afterward: no late wrist cue. Lock the phone
   and reopen after zero: no additional catch-up cue, whether the locked cue fired or not.
 - Force-close during a rest and reopen after zero: no wrist cue replay. Verify the
-  next fresh rest works. Repeat skip, undo, replacement and finish before locking.
+  next fresh rest works. Repeat early start, undo, replacement and finish before locking.
 - Enable phone notifications. Lock the phone through a countdown and verify one phone
   alert. Repeat after force-closing. Reopen and verify that the rest is complete.
 - Deny notifications and verify the settings message explains the missing fallback.
@@ -115,7 +133,7 @@ or screenshot route is available in the published Release build.
 
 ## Heart rate and workout load
 
-Active workouts and history show completed sets, reps, and external volume load
+Completed summaries and history show completed sets, reps, and external volume load
 (completed reps times logged weight), plus an HR graph and average/peak HR. Volume
 load is not muscular strain; it excludes unlogged body mass and machine mechanics.
 The cardio estimate reuses NOOP's existing independent HR-reserve/TRIMP scorer on
@@ -126,7 +144,11 @@ The graph reads the existing local HR database within the workout's saved start/
 times. It breaks lines across gaps longer than one minute; a short or insufficient
 recording has no cardio score. Sync can later fill missing HR. Deleting the HR
 database removes the graph, while the separately stored lifting log remains.
-Live summaries refresh every 15 seconds while visible. The durable active session
+Completed summaries refresh every 15 seconds while visible to show later sync data.
+Select an exercise to highlight its recorded set intervals, or scrub the graph for
+BPM and exercise context. Completions without starts use markers, not invented bands.
+Time in zones uses the current profile's custom boundaries when configured.
+The durable active session
 owns one realtime-HR request, released on finish/discard; iOS suspension still limits
 live capture. Metrics never create another HR workout or add a second day-strain entry.
 

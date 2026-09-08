@@ -125,7 +125,7 @@ struct StrengthSessionView: View {
                         Text(remaining > 0 ? strengthTime(remaining) : "+\(strengthTime(max(0, elapsed - open.plannedSeconds)))")
                             .font(.system(size: 60, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(StrandPalette.accent)
                         HStack { StrengthStat(value: strengthTime(open.plannedSeconds), label: "Planned"); Spacer(); StrengthStat(value: strengthTime(elapsed), label: "Rested so far") }
-                        Text(tracker.state.wristAlert ? "Wrist cue enabled" : "Wrist cue off").font(.caption).foregroundStyle(StrandPalette.textSecondary)
+                        Text(tracker.restStatus ?? (tracker.state.wristAlert ? "Wrist cue enabled" : "Wrist cue off")).font(.caption).foregroundStyle(StrandPalette.textSecondary)
                     }.padding(.vertical, 8)
                 }
             }
@@ -194,8 +194,12 @@ struct StrengthSessionView: View {
 
     private func bottom(_ session: StrengthSession) -> some View {
         VStack(spacing: 8) {
-            if tab == "Exercises", let rest = tracker.state.rest {
-                TimelineView(.periodic(from: .now, by: 1)) { context in Text(rest.remaining(at: context.date) > 0 ? "Rest remaining  \(strengthTime(rest.remaining(at: context.date)))" : "Rest complete").font(.headline.monospacedDigit()) }
+            if tab == "Exercises", let open = session.openRest {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let remaining = tracker.state.rest?.remaining(at: context.date) ?? 0
+                    Text(remaining > 0 ? "Rest remaining  \(strengthTime(remaining))" : "Rested  \(strengthTime(Int(context.date.timeIntervalSince(open.startedAt))))")
+                        .font(.headline.monospacedDigit())
+                }
             }
             if tab == "Live", let next = session.nextSet {
                 Button {

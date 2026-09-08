@@ -141,7 +141,7 @@ public enum StrengthProgress {
 
 extension StrengthRoutine {
     /// Editable starting points, never a prescription or a generated health recommendation.
-    public static var starterDays: [StrengthRoutine] {
+    public static let starterDays: [StrengthRoutine] = {
         [("Upper body A", [1, 15, 7, 8]), ("Push day", [1, 6, 7, 17]),
          ("Pull day", [15, 16, 4, 8]), ("Leg day", [0, 11, 12, 13, 19])].map { name, indexes in
             let movements = indexes.map { index -> StrengthMovement in
@@ -151,5 +151,5 @@ extension StrengthRoutine {
             }
             return StrengthRoutine(name: name, movements: movements, restSeconds: 90, unit: .kg)
         }
-    }
+    }()
 }

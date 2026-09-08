@@ -8,6 +8,7 @@ import StrengthTracking
 @MainActor
 final class LiveActivityController {
     private var strengthActive = false
+    private var endingHRActivityIDs: Set<String> = []
     private let strengthActivity = StrengthLiveActivityController()
     func updateStrength(_ state: StrengthState) {
         strengthActive = state.active != nil
@@ -16,9 +17,16 @@ final class LiveActivityController {
     }
     private func endForStrength() {
         // Capture only existing HR activities; a delayed cleanup cannot end a newer one.
-        let existing = Activity<NOOPActivityAttributes>.activities
+        let existing = Activity<NOOPActivityAttributes>.activities.filter { !endingHRActivityIDs.contains($0.id) }
         activity = nil
-        if !existing.isEmpty { Task { for item in existing { await item.end(nil, dismissalPolicy: .immediate) } } }
+        endingHRActivityIDs.formUnion(existing.map(\.id))
+        if !existing.isEmpty { Task {
+            for item in existing {
+                await item.end(nil, dismissalPolicy: .immediate)
+                endingHRActivityIDs.remove(item.id)
+                if activity?.id == item.id { activity = nil }
+            }
+        } }
     }
     private var activity: Activity<NOOPActivityAttributes>?
     private var lastPush: Date = .distantPast
@@ -50,7 +58,12 @@ final class LiveActivityController {
         // — which made the #336 opt-out a no-op (#341: toggle off, heart stays) and risked spawning a
         // duplicate on the start path below. Done on the HR tick rather than in `init` because
         // `Activity.activities` isn't reliably hydrated at the instant of process launch.
-        if activity == nil { activity = Activity<NOOPActivityAttributes>.activities.first }
+        if let current = activity, current.activityState == .ended || current.activityState == .dismissed { activity = nil }
+        if activity == nil {
+            activity = Activity<NOOPActivityAttributes>.activities.first {
+                !endingHRActivityIDs.contains($0.id) && ($0.activityState == .active || $0.activityState == .stale)
+            }
+        }
 
         // User opt-out (#336): if the in-app toggle is off, never start — and end any activity that's
         // already showing (the user just turned it off; this fires on the next ~1 Hz HR tick).

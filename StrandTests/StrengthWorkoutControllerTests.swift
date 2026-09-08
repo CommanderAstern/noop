@@ -5,6 +5,25 @@ import StrengthTracking
 @MainActor
 final class StrengthWorkoutControllerTests: XCTestCase {
     private let runtimeEpoch = ContinuousClock.now
+    func testExpiredLegacyRestIsRestoredAndConsumedSilentlyOnLaunch() throws {
+        let (disk, original) = try fixture()
+        var legacy = original; legacy.version = 1
+        legacy.active!.restIntervals = nil
+        let completed = Date().addingTimeInterval(-100)
+        legacy.active!.startedAt = completed.addingTimeInterval(-20)
+        legacy.active!.movements[0].sets[0].completedAt = completed
+        legacy.rest!.deadline = completed.addingTimeInterval(90)
+        try disk.save(legacy)
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        var cues = 0; tracker.strapReady = { true }; tracker.buzz = { cues += 1 }
+        tracker.tick(allowWrist: true, now: Date())
+        XCTAssertEqual(cues, 0)
+        XCTAssertEqual(tracker.state.rest?.id, legacy.rest?.id)
+        XCTAssertEqual(tracker.state.rest?.consumed, true)
+        XCTAssertEqual(tracker.state.active?.openRest?.startedAt, completed)
+        XCTAssertNil(tracker.state.active?.actualRest)
+        XCTAssertEqual(try disk.load().version, 2)
+    }
     func testConstantHeartRateRemainsFreshWithoutRepublishingValues() {
         let live = LiveState(); live.connected = true
         let start = Date(timeIntervalSince1970: 1000)
@@ -16,6 +35,10 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(31)))
         live.receiveHeartRate(118, at: start.addingTimeInterval(32)); live.connected = false
         XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(33)))
+        live.connected = true
+        XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(33)))
+        live.receiveHeartRate(118, at: start.addingTimeInterval(34))
+        XCTAssertEqual(live.currentHeartRate(at: start.addingTimeInterval(35)), 118)
     }
     func testSetStartAndUndoSurviveRestartAndFailedSave() throws {
         let (disk, original) = try fixture()
