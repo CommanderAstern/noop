@@ -5,64 +5,51 @@ import StrandDesign
 import PhotosUI
 #endif
 
-/// Original schematic equipment drawings. Custom photos are optional; no third-party art is fetched.
+/// Original generated equipment renders; optional custom photos remain local to the workout file.
 struct StrengthExerciseArt: View {
     let exercise: StrengthExercise
     var body: some View {
         Group {
             #if os(iOS)
             if let data = exercise.photo, let photo = UIImage(data: data) { Image(uiImage: photo).resizable().scaledToFit() }
-            else { drawing }
+            else { equipmentImage }
             #else
             if let data = exercise.photo, let photo = NSImage(data: data) { Image(nsImage: photo).resizable().scaledToFit() }
-            else { drawing }
+            else { equipmentImage }
             #endif
         }.accessibilityHidden(true)
     }
-    private var drawing: some View {
-        Canvas { context, size in
-            let scale = min(size.width / 120, size.height / 100)
-            context.translateBy(x: (size.width - 120 * scale) / 2, y: (size.height - 100 * scale) / 2)
-            context.scaleBy(x: scale, y: scale)
-            let equipment = exercise.equipment.lowercased()
-            func line(_ points: [CGPoint], width: CGFloat = 5, accent: Bool = false) {
-                var path = Path(); path.addLines(points)
-                context.stroke(path, with: .color(accent ? StrandPalette.accent : StrandPalette.textSecondary), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-            }
-            func bar(_ x: CGFloat, _ y: CGFloat) {
-                line([CGPoint(x: x - 24, y: y), CGPoint(x: x + 24, y: y)], width: 4)
-                for offset in [-18.0, 18.0] { line([CGPoint(x: x + offset, y: y - 10), CGPoint(x: x + offset, y: y + 10)], width: 8, accent: true) }
-            }
-            if equipment.contains("machine") || equipment.contains("cable") {
-                line([.init(x: 12, y: 88), .init(x: 108, y: 88)], width: 3)
-                line([.init(x: 92, y: 88), .init(x: 92, y: 12), .init(x: 35, y: 12)])
-                line([.init(x: 38, y: 18), .init(x: 38, y: 42)], width: 2)
-                line([.init(x: 23, y: 42), .init(x: 53, y: 42)], accent: true)
-                line([.init(x: 26, y: 69), .init(x: 66, y: 69), .init(x: 66, y: 46)], width: 8)
-                line([.init(x: 35, y: 74), .init(x: 35, y: 88)])
-                for y in stride(from: 50, through: 78, by: 7) { line([.init(x: 80, y: y), .init(x: 102, y: y)], width: 4) }
-            } else if equipment.contains("barbell") || equipment.contains("smith") {
-                if exercise.name.localizedCaseInsensitiveContains("bench") {
-                    bar(60, 27)
-                    line([.init(x: 18, y: 31), .init(x: 18, y: 85)])
-                    line([.init(x: 28, y: 64), .init(x: 92, y: 64)], width: 9)
-                    line([.init(x: 38, y: 68), .init(x: 34, y: 89)])
-                    line([.init(x: 85, y: 68), .init(x: 94, y: 89)])
-                } else if exercise.name.localizedCaseInsensitiveContains("squat") || exercise.name.localizedCaseInsensitiveContains("press") {
-                    bar(60, 30)
-                    line([.init(x: 25, y: 12), .init(x: 25, y: 88), .init(x: 12, y: 88)])
-                    line([.init(x: 95, y: 12), .init(x: 95, y: 88), .init(x: 108, y: 88)])
-                } else {
-                    bar(60, 62)
-                    line([.init(x: 24, y: 79), .init(x: 96, y: 79)], width: 2)
-                }
-            } else if equipment.contains("bodyweight") {
-                let head = Path(ellipseIn: CGRect(x: 51, y: 9, width: 18, height: 18))
-                context.fill(head, with: .color(StrandPalette.textSecondary))
-                line([.init(x: 60, y: 31), .init(x: 60, y: 58)])
-                line([.init(x: 34, y: 38), .init(x: 60, y: 35), .init(x: 86, y: 38)], accent: true)
-                line([.init(x: 37, y: 85), .init(x: 60, y: 58), .init(x: 83, y: 85)])
-            } else { bar(43, 36); bar(77, 69) }
+    private var equipmentImage: some View {
+        Image("strength-" + assetName).resizable().interpolation(.high).scaledToFit().padding(2)
+    }
+    private var assetName: String {
+        let name = exercise.name.lowercased()
+        switch exercise.equipment.lowercased() {
+        case "barbell":
+            if name.contains("bench") { return "bench" }
+            if name.contains("squat") || name.contains("press") { return "squat" }
+            return "barbell"
+        case "dumbbell":
+            return name.contains("bench") || name.contains("shoulder press") ? "adjustable-bench" : "dumbbell"
+        case "kettlebell": return "kettlebell"
+        case "smith machine": return "smith"
+        case "machine":
+            if name.contains("leg press") { return "leg-press" }
+            if name.contains("extension") { return "leg-extension" }
+            if name.contains("curl") { return "leg-curl" }
+            if name.contains("chest") { return "chest-press" }
+            if name.contains("calf") { return "calf" }
+            if name.contains("abduction") { return "hip-abduction" }
+            return "cable"
+        case "cable":
+            if name.contains("pulldown") { return "pulldown" }
+            if name.contains("row") { return "row" }
+            return "cable"
+        case "bodyweight":
+            if name.contains("pull-up") { return "pullup" }
+            if name.contains("dip") { return "dip" }
+            return "mat"
+        default: return "dumbbell"
         }
     }
 }
@@ -73,7 +60,7 @@ struct StrengthExercisePicker: View {
     var selectedExercises: (([StrengthExercise]) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
-    @State private var equipment = "All"
+    @State var equipment = "All"
     @State private var selected: Set<UUID> = []
     @State private var custom = false
     private var catalog: [StrengthExercise] { tracker.state.customExercises + StrengthExercise.catalog }

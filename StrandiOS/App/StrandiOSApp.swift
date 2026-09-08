@@ -521,6 +521,7 @@ enum DemoScreens {
         case "strength-home": return AnyView(StrengthDemoView(mode: "home"))
         case "strength-active": return AnyView(StrengthDemoView(mode: "active"))
         case "strength-picker": return AnyView(StrengthDemoView(mode: "picker"))
+        case "strength-machines": return AnyView(StrengthDemoView(mode: "machines"))
         case "strength-history": return AnyView(StrengthDemoView(mode: "history"))
         case "strength-summary": return AnyView(StrengthDemoView(mode: "summary"))
         case "strength-progress": return AnyView(StrengthDemoView(mode: "progress"))

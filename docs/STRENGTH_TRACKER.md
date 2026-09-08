@@ -10,6 +10,10 @@ heart-rate activity log: no strap or heart-rate samples are needed to save a lif
    starting templates. Set your own weights, or start an empty workout.
 2. Add an exercise or gym machine. Search by exercise/equipment, or create a custom
    name and equipment label (for example, "Chest press" / "Gym machine 4").
+   The equipment library uses bundled AI-generated illustrations with a consistent
+   silver/charcoal/mint style. They work offline and represent equipment categories,
+   not a specific manufacturer's machine or exercise-form instruction. Custom entries
+   can include your own photo. See STRENGTH_ARTWORK.md for the asset list and prompts.
 3. Enter reps and weight for each set. Use kg or lb. Zero means no external load;
    use a consistent convention for pairs of dumbbells (such as combined weight).
 4. **Live** shows current BPM and your configured HR zones, with one Start/Complete

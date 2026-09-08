@@ -120,3 +120,7 @@ the automated model tests do not claim to simulate those system frameworks.
     (`Strand/Liquid/LiquidTodayView.swift:449`, same follow-up). The native handoff
     covers presentations owned by descendants, including Settings, without relying
     on an incomplete list of shell bindings.
+28. **P2 — Full-screen covers can detach the handoff's underlying view**
+    (`StrandiOS/App/StrengthSheetHandoff.swift:17`, focused follow-up). Cache the host's
+    own window weakly while attached, so the same scene's presenter remains available
+    under a full-screen cover. Never select another scene's key window.

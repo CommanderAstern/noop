@@ -14,7 +14,7 @@ struct StrengthSheetHandoff: UIViewControllerRepresentable {
     func updateUIViewController(_ host: Host, context: Context) {
         host.request = { [weak host] in
             guard enabled, tracker.pendingPresentation != nil else { return }
-            guard let host, let root = host.view.window?.rootViewController else { return }
+            guard let host, let root = host.sceneRoot else { return }
             // An already-open strength sheet consumes a navigation event in place.
             if tracker.presented { deliver(); return }
             if let existing = root.presentedViewController {
@@ -38,10 +38,19 @@ struct StrengthSheetHandoff: UIViewControllerRepresentable {
     }
 
     final class Host: UIViewController {
+        private weak var sceneWindow: UIWindow?
+        var sceneRoot: UIViewController? {
+            if let window = view.window { sceneWindow = window }
+            return sceneWindow?.rootViewController
+        }
         var request: (() -> Void)?
         var busy = false
         private var scheduled = false
-        override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); schedule() }
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            sceneWindow = view.window
+            schedule()
+        }
         func schedule() {
             guard !busy, !scheduled else { return }
             scheduled = true

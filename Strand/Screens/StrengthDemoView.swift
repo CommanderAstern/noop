@@ -61,6 +61,7 @@ struct StrengthDemoView: View {
     var body: some View {
         Group {
             if mode == "picker" { StrengthExercisePicker(tracker: tracker) }
+            else if mode == "machines" { StrengthExercisePicker(tracker: tracker, libraryOnly: true, equipment: "Machine") }
             else if mode == "summary", let session = tracker.state.history.first { StrengthSummaryView(session: session, tracker: tracker) }
             else if mode == "summary-detail", let session = tracker.state.history.first {
                 StrengthSummaryView(session: session, tracker: tracker, initialScrollTarget: "heart-rate", highlightedMovement: session.movements.first?.id)
