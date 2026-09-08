@@ -208,7 +208,7 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func removeOrphanedNotifications() {
-        guard readable else { return }
+        guard platformServices, readable else { return }
         Task { [weak self] in
             let center = UNUserNotificationCenter.current()
             let pending = await center.pendingNotificationRequests()
