@@ -78,6 +78,31 @@ final class StrengthFlowTests: XCTestCase {
         XCTAssertEqual(first.movements[0].sets[0].kilograms, 40)
         XCTAssertEqual(second.movements[0].sets[0].kilograms, 0)
     }
+    func testPreviousTargetsRetainPerSetProgressionAndWarmupKinds() {
+        var prior = state()
+        prior.active!.movements[0].sets.append(StrengthSet(reps: 6, kilograms: 70))
+        for index in 0..<4 { complete(&prior, index, Double(index * 150 + 30)) }
+        prior.finish(now: now.addingTimeInterval(600))
+        var current = StrengthState(); current.history = prior.history
+        current.start(now: now.addingTimeInterval(1000))
+        let exercise = StrengthExercise.catalog[1]
+        current.addExercise(exercise)
+        let targets = current.active!.movements[0].sets
+        XCTAssertEqual(targets.map(\.kilograms), [20, 60, 65, 70])
+        XCTAssertEqual(targets.map(\.reps), [12, 8, 8, 6])
+        XCTAssertEqual(targets[0].kind, .warmup)
+        XCTAssertTrue(targets.allSatisfy { $0.completedAt == nil && $0.startedAt == nil })
+        XCTAssertNotEqual(targets[1].id, prior.history[0].movements[0].sets[1].id)
+        for index in 1...3 {
+            let ordinal = current.active!.ordinal(of: targets[index].id)!
+            XCTAssertEqual(ordinal, index - 1)
+            XCTAssertEqual(current.previousSet(for: exercise, ordinal: ordinal)?.kilograms, targets[index].kilograms)
+        }
+        XCTAssertNil(current.previousSet(for: exercise, ordinal: 3))
+        let extra = StrengthMovement(exercise: exercise)
+        current.active!.movements.append(extra)
+        XCTAssertEqual(current.active!.ordinal(of: extra.sets[0].id), 3)
+    }
     func testOldSchemaDefaultsWithoutFabricatingHistory() throws {
         var original = state(); original.version = 1
         let data = try JSONEncoder().encode(original)

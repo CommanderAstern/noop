@@ -83,3 +83,12 @@ the automated model tests do not claim to simulate those system frameworks.
     (`Strand/Screens/StrengthWorkoutsView.swift:124`, same review). Opening a starter
     constructs a fresh routine and set identities. A regression checks independent
     identities and targets for two variants of the same prototype.
+19. **P2 — Previous targets collapse to the first set**
+    (`Packages/StrengthTracking/Sources/StrengthTracking/StrengthFlow.swift:90`,
+    GitHub Codex review of `c7a58b5`). Previous values now match exercise identity,
+    kind and ordinal; adding an exercise preserves the last recorded set progression
+    with fresh IDs. Tests cover warm-ups, 60/65/70 kg targets, reps and repeated blocks.
+20. **Lifecycle follow-up — Resume normal HR activity after strength ends**
+    (`StrandiOS/App/StrandiOSApp.swift:195`, local inspection). Reconcile a fresh HR
+    reading on strength finish/discard, preference change and foreground entry, without
+    waiting for a BPM value change. Pending cleanup IDs remain excluded from adoption.

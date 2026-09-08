@@ -150,6 +150,13 @@ struct StrandiOSApp: App {
         }
     }
 
+    private func refreshHRActivity() {
+        let day = model.repo.cachedWidgetAnchor()
+        liveActivity.update(bpm: model.live.currentHeartRate(),
+            recovery: day?.recovery.map { Int($0.rounded()) }, connected: model.live.connected,
+            effort: day?.strain.map { Int($0.rounded()) })
+    }
+
     var body: some Scene {
         WindowGroup {
             iOSRootView()
@@ -193,8 +200,14 @@ struct StrandiOSApp: App {
                         effort: day?.strain.map { Int($0.rounded()) }
                     )
                 }
-                .onReceive(model.strengthWorkouts.$state) { state in liveActivity.updateStrength(state) }
-                .onChange(of: strengthActivitiesEnabled) { _, _ in liveActivity.updateStrength(model.strengthWorkouts.state) }
+                .onReceive(model.strengthWorkouts.$state) { state in
+                    liveActivity.updateStrength(state)
+                    if state.active == nil { refreshHRActivity() }
+                }
+                .onChange(of: strengthActivitiesEnabled) { _, _ in
+                    liveActivity.updateStrength(model.strengthWorkouts.state)
+                    refreshHRActivity()
+                }
                 // End the Live Activity the moment the link drops, even if no further HR tick arrives.
                 .onReceive(model.live.$connected) { isConnected in
                     // #911: same shared anchor as the heartRate site above, so the Live Activity, the
@@ -304,6 +317,7 @@ struct StrandiOSApp: App {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 liveActivity.updateStrength(model.strengthWorkouts.state)
+                refreshHRActivity()
                 model.drainPendingIntents(router: router)
                 // Re-arm the strap's smart alarm on foreground: the firmware alarm is a single instant
                 // and iOS can't re-arm it while suspended, so it would otherwise fire once and stop.

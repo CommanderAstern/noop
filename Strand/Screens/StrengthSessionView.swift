@@ -138,7 +138,7 @@ struct StrengthSessionView: View {
                     HStack { StrengthStat(value: strengthWeight(next.set.kilograms, unit: session.unit), label: session.unit.rawValue); Spacer(); StrengthStat(value: "\(next.set.reps)", label: "reps"); Image(systemName: "pencil") }
                         .padding(16).background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 14))
                 }.buttonStyle(.plain).accessibilityLabel("Edit next set weight and reps")
-                if let previous = tracker.state.previousSet(for: next.movement.exercise, kind: next.set.kind) {
+                if let previous = tracker.state.previousSet(for: next.movement.exercise, kind: next.set.kind, ordinal: session.ordinal(of: next.set.id) ?? 0) {
                     Text("Previous: \(strengthWeight(previous.kilograms, unit: session.unit)) \(session.unit.rawValue) × \(previous.reps)")
                         .font(.caption).foregroundStyle(StrandPalette.textSecondary)
                 }
@@ -167,7 +167,7 @@ struct StrengthSessionView: View {
             ForEach(Array(movement.sets.enumerated()), id: \.element.id) { index, set in
                 HStack(spacing: 4) {
                     Text(set.kind == .warmup ? "W" : "\(index + 1)").frame(width: 30)
-                    Text(tracker.state.previousSet(for: movement.exercise, kind: set.kind).map { "\(strengthWeight($0.kilograms, unit: session.unit)) × \($0.reps)" } ?? "—")
+                    Text(tracker.state.previousSet(for: movement.exercise, kind: set.kind, ordinal: session.ordinal(of: set.id) ?? 0).map { "\(strengthWeight($0.kilograms, unit: session.unit)) × \($0.reps)" } ?? "—")
                         .font(.caption).foregroundStyle(StrandPalette.textSecondary).frame(maxWidth: .infinity)
                     Button { edit = SetSelection(movement: movement, set: set) } label: {
                         HStack { Text(strengthWeight(set.kilograms, unit: session.unit)).frame(width: 58); Text("\(set.reps)").frame(width: 45) }.frame(minHeight: 44)

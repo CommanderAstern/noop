@@ -52,6 +52,13 @@ extension StrengthSession {
         }
         return nil
     }
+    /// Match the same exercise and set kind across repeated exercise blocks in session order.
+    public func ordinal(of setID: UUID) -> Int? {
+        guard let movement = movements.first(where: { $0.sets.contains { $0.id == setID } }),
+              let set = movement.sets.first(where: { $0.id == setID }) else { return nil }
+        return movements.filter { $0.exercise.id == movement.exercise.id }.flatMap(\.sets)
+            .filter { $0.kind == set.kind }.firstIndex { $0.id == setID }
+    }
     mutating func closeRest(at now: Date, nextSetID: UUID?, reason: StrengthRestInterval.EndReason) {
         guard let index = restIntervals?.lastIndex(where: { $0.endedAt == nil }) else { return }
         let chronological = now >= restIntervals![index].startedAt
@@ -84,18 +91,27 @@ extension StrengthState {
         undoSet(movementID: last.0, setID: last.1.id)
     }
 
-    public func previousSet(for exercise: StrengthExercise, kind: StrengthSetKind = .working) -> StrengthSet? {
+    public func previousSets(for exercise: StrengthExercise) -> [StrengthSet] {
         for session in history.sorted(by: { $0.startedAt > $1.startedAt }) {
-            if let set = session.movements.filter({ $0.exercise.id == exercise.id }).flatMap(\.sets)
-                .first(where: { $0.completedAt != nil && $0.kind == kind }) { return set }
+            let sets = session.movements.filter { $0.exercise.id == exercise.id }.flatMap(\.sets)
+                .filter { $0.completedAt != nil }
+            if !sets.isEmpty { return sets }
         }
-        return nil
+        return []
+    }
+    public func previousSet(for exercise: StrengthExercise, kind: StrengthSetKind = .working, ordinal: Int = 0) -> StrengthSet? {
+        let sets = previousSets(for: exercise).filter { $0.kind == kind }
+        return sets.indices.contains(ordinal) ? sets[ordinal] : nil
+    }
+    public func suggestedSets(for exercise: StrengthExercise) -> [StrengthSet] {
+        let previous = previousSets(for: exercise)
+        return previous.isEmpty ? [StrengthSet(), StrengthSet(), StrengthSet()] : previous.map { $0.fresh() }
     }
 
     public mutating func addExercise(_ exercise: StrengthExercise) {
         guard active != nil else { return }
-        let target = previousSet(for: exercise)?.fresh() ?? StrengthSet()
-        active?.movements.append(StrengthMovement(exercise: exercise, sets: [target, target.fresh(), target.fresh()]))
+        let targets = suggestedSets(for: exercise)
+        active?.movements.append(StrengthMovement(exercise: exercise, sets: targets))
     }
 }
 

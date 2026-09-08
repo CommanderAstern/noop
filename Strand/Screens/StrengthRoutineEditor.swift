@@ -56,8 +56,7 @@ struct StrengthRoutineEditor: View {
             .sheet(isPresented: $adding) {
                 StrengthExercisePicker(tracker: tracker, selectedExercises: { exercises in
                     routine.movements.append(contentsOf: exercises.map { exercise in
-                        let set = tracker.state.previousSet(for: exercise)?.fresh() ?? StrengthSet()
-                        return StrengthMovement(exercise: exercise, sets: [set, set.fresh(), set.fresh()])
+                        StrengthMovement(exercise: exercise, sets: tracker.state.suggestedSets(for: exercise))
                     })
                 })
             }
