@@ -141,3 +141,6 @@ the automated model tests do not claim to simulate those system frameworks.
     (`Strand/Screens/StrengthRoutineEditor.swift:29`, local inspection). Add set now
     copies the last working target or creates a default working set; Add warm-up
     remains the explicit way to create a warm-up.
+33. **Summary follow-up — Exercise breakdown has the same raw-index label**
+    (`Strand/Screens/StrengthSummaryView.swift:78`, cross-screen search). Completed
+    summaries now share the same warm-up-independent working-set ordinal too.

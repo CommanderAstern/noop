@@ -73,9 +73,9 @@ struct StrengthSummaryView: View {
                 Text("Exercise breakdown").font(.title2.bold())
                 ForEach(session.movements) { movement in
                     DisclosureGroup {
-                        ForEach(Array(movement.sets.enumerated()), id: \.element.id) { index, set in
+                        ForEach(movement.sets) { set in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("\(set.kind == .warmup ? "Warm-up" : "Set \(index + 1)") · \(strengthWeight(set.kilograms, unit: session.unit)) \(session.unit.rawValue) × \(set.reps)")
+                                Text("\(set.kind == .warmup ? "Warm-up" : "Set \((movement.ordinal(of: set.id) ?? 0) + 1)") · \(strengthWeight(set.kilograms, unit: session.unit)) \(session.unit.rawValue) × \(set.reps)")
                                 Text(set.completedAt == nil ? "Not completed" : "Completed").font(.caption)
                                 if let interval = session.restIntervals?.first(where: { $0.setID == set.id }) {
                                     Text("Rest target \(strengthTime(interval.plannedSeconds)) · actual \(interval.actualSeconds.map { strengthTime(Int($0)) } ?? "unknown")\(interval.reason == .finished ? " · trailing rest" : "")").font(.caption).foregroundStyle(StrandPalette.textSecondary)
