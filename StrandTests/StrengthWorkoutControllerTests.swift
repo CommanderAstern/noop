@@ -243,4 +243,24 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(attempts, 1)
     }
 
+
+    func testForegroundEntryConsumesBeforeTimerResumesFromShortLock() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch)
+        // willEnterForeground arrives before a resumed timer, then didBecomeActive follows.
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.25),
+            instant: runtimeEpoch.advanced(by: .seconds(0.75)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.75),
+            instant: runtimeEpoch.advanced(by: .seconds(1.25)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
 }

@@ -52,6 +52,10 @@ final class StrengthWorkoutController: ObservableObject {
         tick(allowWrist: false)
         guard platformServices else { return }
         #if os(iOS)
+        // Foreground entry precedes timer resumption / didBecomeActive. Consume missed
+        // rests here too, so even a short lock across zero cannot buzz during unlock.
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in self?.resumeForeground() }.store(in: &lifecycle)
         let activeName = UIApplication.didBecomeActiveNotification
         #else
         let activeName = NSApplication.didBecomeActiveNotification
