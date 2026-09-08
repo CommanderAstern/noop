@@ -35,14 +35,20 @@ three-loop haptic pattern and `runAlarm`. No firmware wake alarm is armed or cha
 
 The countdown is an absolute deadline owned by AppModel, not a view timer. At the
 deadline, consumption is written atomically before issuing a wrist command. Only
-an active app with a ready bonded connection can attempt the cue, within two seconds
-of the deadline. Late, inactive, disconnected and disabled completions are consumed
-without retry. Relaunch consumes expired rests silently. A future rest can continue.
+a ready bonded connection can attempt the cue, within two seconds of the deadline,
+while execution remains fresh. The app timer and workout HR callbacks check the same
+durable countdown, including with the screen off using the existing `bluetooth-central`
+background mode. A monotonic execution gap longer than two seconds suppresses the cue,
+even if a delayed callback arrives within the deadline grace. Late, disconnected and
+disabled completions are consumed without retry. Foreground resume and process relaunch
+consume expired rests silently. A future rest can continue.
 There are no end-of-countdown ticks, repeated alarms, or reconnect catch-up alerts.
 
-One command attempt is not a guarantee of one physical motor response. Actual wrist
-vibration needs testing on your strap; a command acknowledgement cannot confirm it.
-The intentionally shorter single-command cue may be ignored by some firmware.
+One command attempt is not a guarantee of one physical motor response. The user confirmed
+the foreground cue on WHOOP Peak 5.0; screen-off delivery still needs hardware testing.
+Bluetooth background execution is best effort, not an exact timer guarantee. iOS may
+suspend or terminate the app. Do not force-close NOOP Lab during a workout. No audio,
+location, or firmware alarm workaround is used to keep the rest timer alive.
 
 Enable **Phone notification** and allow notifications for fallback while the app is
 locked, suspended or terminated. iOS delivers the nonrepeating local notification;
@@ -55,7 +61,10 @@ and discard cancel pending requests; foreground stale requests are suppressed.
 
 Active workout, completed history, custom exercises, routines, preferences and the
 rest consumption marker share one versioned, atomic JSON file under Application
-Support/StrengthWorkouts/v1.json. Save failures are visible and prevent associated
+Support/StrengthWorkouts/v1.json. On iOS, the directory and document explicitly use
+protection until first user authentication, matching the background BLE database.
+They remain encrypted and become available after the first unlock since boot, including
+subsequent screen locks; existing valid documents are migrated on load. Save failures are visible and prevent associated
 side effects. Corrupt or newer-version data is not silently overwritten. This is
 separate from NOOP's SQLite database and existing `.noopbak` database exports.
 App updates retain the data; deleting the app deletes its local strength data.
@@ -88,8 +97,14 @@ Do not delete the app to update it. Keep the working version available for rollb
 - Start rest, navigate to another tab, and keep the app active. Check one cue at zero.
 - Start rest and then Skip, Undo, complete another set, Finish, or Discard. Check that
   no cancelled countdown cues arrive.
-- Disconnect WHOOP before zero, reconnect afterward: no late wrist cue. Repeat by
-  locking the phone and reopening after zero: no catch-up wrist cue.
+- Repeat with 15-, 90- and 180-second rests: lock the phone immediately after completing
+  a set, keep WHOOP nearby, and check for one wrist cue at zero with no repeats. Also
+  test while another app is visible. Screen-off delivery is best effort and must be
+  checked on the actual strap; a simulator cannot establish physical delivery.
+- Disconnect WHOOP before zero, reconnect afterward: no late wrist cue. Lock the phone
+  and reopen after zero: no additional catch-up cue, whether the locked cue fired or not.
+- Force-close during a rest and reopen after zero: no wrist cue replay. Verify the
+  next fresh rest works. Repeat skip, undo, replacement and finish before locking.
 - Enable phone notifications. Lock the phone through a countdown and verify one phone
   alert. Repeat after force-closing. Reopen and verify that the rest is complete.
 - Deny notifications and verify the settings message explains the missing fallback.

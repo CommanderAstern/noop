@@ -4,6 +4,7 @@ import StrengthTracking
 
 @MainActor
 final class StrengthWorkoutControllerTests: XCTestCase {
+    private let runtimeEpoch = ContinuousClock.now
     func fixture() throws -> (StrengthFileStore, StrengthState) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
@@ -107,4 +108,190 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: disk.url), data)
         XCTAssertNotNil(tracker.error)
     }
+
+    func testRuntimeCallbacksWithoutForegroundDeliverOnceAndPersist() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = {
+            XCTAssertEqual(try? disk.load().rest?.consumed, true)
+            attempts += 1
+        }
+        // No foreground lifecycle event: models timer / Bluetooth callbacks while locked.
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.5))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), instant: runtimeEpoch.advanced(by: .seconds(102)))
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testSuspendedRuntimeDoesNotReplayInsideDeadlineGrace() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        // Continuous-clock advancement includes device sleep even when awake uptime barely changes.
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-10), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(110.5)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), instant: runtimeEpoch.advanced(by: .seconds(111)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testUnlockConsumesMissedRestButNextRestCanBuzz() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.resumeForeground(now: deadline)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(101)))
+        XCTAssertEqual(attempts, 0)
+        let movement = original.active!.movements[0]
+        tracker.change {
+            $0.undoSet(movementID: movement.id, setID: movement.sets[0].id)
+            $0.completeSet(movementID: movement.id, setID: movement.sets[0].id, now: deadline)
+        }
+        let next = tracker.state.rest!.deadline
+        tracker.runtimeTick(now: next.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(190)))
+        tracker.runtimeTick(now: next, instant: runtimeEpoch.advanced(by: .seconds(191)))
+        XCTAssertEqual(attempts, 1)
+    }
+
+    func testRuntimeDisconnectedDeadlineCannotReplayOnReconnect() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        var connected = false
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(101.5)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testRuntimeFirstCallbackAfterLaunchCannotReplay() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: original.rest!.deadline, instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: original.rest!.deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(100.5)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+
+    func testUnlockJustBeforeDeadlineKeepsFutureCueEligible() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.resumeForeground(now: deadline.addingTimeInterval(-0.1), instant: runtimeEpoch)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.15),
+            instant: runtimeEpoch.advanced(by: .milliseconds(250)))
+        XCTAssertEqual(attempts, 1)
+    }
+
+
+    func testReconnectAfterDeadlineWithoutDeadlineTickCannotBuzz() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var connected = false
+        var attempts = 0
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch)
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1),
+            instant: runtimeEpoch.advanced(by: .seconds(1.5)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testReconnectBeforeDeadlineAllowsFreshCue() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var connected = false
+        var attempts = 0
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch)
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(0.5)))
+        tracker.runtimeTick(now: deadline,
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        XCTAssertEqual(attempts, 1)
+    }
+
+
+    func testForegroundEntryConsumesBeforeTimerResumesFromShortLock() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch)
+        // willEnterForeground arrives before a resumed timer, then didBecomeActive follows.
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.25),
+            instant: runtimeEpoch.advanced(by: .seconds(0.75)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        tracker.resumeForeground(now: deadline.addingTimeInterval(0.75),
+            instant: runtimeEpoch.advanced(by: .seconds(1.25)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+
+    func testUnlockRetriesFailedLoadWithoutReplayingExpiredRest() throws {
+        let (disk, original) = try fixture()
+        // A read failure stands in for protected data that is temporarily unavailable.
+        try Data("unavailable".utf8).write(to: disk.url)
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        XCTAssertNotNil(tracker.error)
+        XCTAssertFalse(tracker.change { $0.start(now: Date()) })
+        try disk.save(original)
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.resumeForeground(now: original.rest!.deadline, instant: runtimeEpoch)
+        XCTAssertEqual(tracker.state.active, original.active)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+        XCTAssertNil(tracker.error)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertTrue(tracker.change { $0.restSeconds = 30 })
+    }
+
+    func testUnlockRetryKeepsUnreadableDocumentUntouched() throws {
+        let (disk, _) = try fixture()
+        let original = Data("invalid".utf8)
+        try original.write(to: disk.url)
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        tracker.resumeForeground()
+        XCTAssertNotNil(tracker.error)
+        XCTAssertFalse(tracker.change { $0.start(now: Date()) })
+        XCTAssertEqual(try Data(contentsOf: disk.url), original)
+    }
+
 }

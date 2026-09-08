@@ -18,7 +18,8 @@ final class StrengthWorkoutController: ObservableObject {
     @Published private(set) var restStatus: String?
     private let storage: StrengthFileStore
     private var readable = true
-    private var foreground = false
+    private var lastRuntimeTick: ContinuousClock.Instant?
+    private var lastRuntimeReady = false
     private var suppressedRestID: UUID?
     private let platformServices: Bool
     private var ticker: AnyCancellable?
@@ -45,32 +46,28 @@ final class StrengthWorkoutController: ObservableObject {
         do { state = try storage.load() }
         catch {
             readable = false
-            self.error = "Strength data could not be read. It has been kept unchanged. Restart the app and try again."
+            self.error = "Strength data could not be read. It has been kept unchanged. Unlock the phone and reopen NOOP Lab to retry."
         }
         // Expired countdowns on process launch are always consumed silently, even within grace.
         tick(allowWrist: false)
         guard platformServices else { return }
         #if os(iOS)
-        foreground = UIApplication.shared.applicationState == .active
+        // Foreground entry precedes timer resumption / didBecomeActive. Consume missed
+        // rests here too, so even a short lock across zero cannot buzz during unlock.
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in self?.resumeForeground() }.store(in: &lifecycle)
+        NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
+            .sink { [weak self] _ in self?.resumeForeground() }.store(in: &lifecycle)
         let activeName = UIApplication.didBecomeActiveNotification
-        let inactiveName = UIApplication.willResignActiveNotification
         #else
-        foreground = NSApplication.shared.isActive
         let activeName = NSApplication.didBecomeActiveNotification
-        let inactiveName = NSApplication.willResignActiveNotification
         #endif
         NotificationCenter.default.publisher(for: activeName).sink { [weak self] _ in
-            // Consume BEFORE marking active: reopening must never replay a background deadline.
-            self?.tick(allowWrist: false)
-            self?.foreground = true
+            self?.resumeForeground()
             self?.refreshNotificationStatus()
         }.store(in: &lifecycle)
-        NotificationCenter.default.publisher(for: inactiveName).sink { [weak self] _ in
-            self?.foreground = false
-        }.store(in: &lifecycle)
         ticker = Timer.publish(every: 0.25, on: .main, in: .common).autoconnect().sink { [weak self] _ in
-            guard let self else { return }
-            self.tick(allowWrist: self.foreground)
+            self?.runtimeTick()
         }
         synchronizeNotification()
         removeOrphanedNotifications()
@@ -97,6 +94,40 @@ final class StrengthWorkoutController: ObservableObject {
             synchronizeNotification(previous: old.rest)
         }
         return true
+    }
+
+    /// The workout's HR stream can wake us through the existing bluetooth-central mode.
+    /// A timer or HR callback may attempt the cue with the screen off, but only if execution
+    /// stayed fresh. A delayed callback after suspension consumes the rest without buzzing.
+    func runtimeTick(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
+        // ContinuousClock includes device sleep; systemUptime does not.
+        let gap = lastRuntimeTick.map { $0.duration(to: instant) }
+        lastRuntimeTick = instant
+        // A ready callback after zero must not replay a rest crossed while disconnected
+        // or disabled, even if the last unavailable callback was just before zero.
+        let previouslyReady = lastRuntimeReady
+        lastRuntimeReady = strapReady() && state.wristAlert
+        tick(allowWrist: previouslyReady && (gap.map { $0 >= .zero && $0 <= .seconds(2) } ?? false), now: now)
+    }
+
+    func resumeForeground(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
+        // A BLE launch before first unlock (or a locked legacy document) can fail its initial
+        // read. Retry on unlock without replacing a readable in-memory session or corrupt data.
+        if !readable {
+            do {
+                let restored = try storage.load()
+                readable = true
+                state = restored
+                error = nil
+                synchronizeNotification()
+                removeOrphanedNotifications()
+            } catch { return }
+        }
+        // Never replay a deadline on unlocking, even if it falls inside the two-second grace.
+        tick(allowWrist: false, now: now)
+        // A still-future deadline remains eligible, including when unlocking just before zero.
+        lastRuntimeTick = instant
+        lastRuntimeReady = strapReady() && state.wristAlert
     }
 
     func tick(allowWrist: Bool, now: Date = Date()) {
@@ -153,7 +184,7 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func synchronizeNotification(previous: StrengthRest? = nil) {
-        guard platformServices else { return }
+        guard platformServices, readable else { return }
         let rest = state.rest.flatMap { timer in
             state.phoneAlert && !timer.consumed && timer.deadline > Date() ? timer : nil
         }
@@ -177,6 +208,7 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func removeOrphanedNotifications() {
+        guard platformServices, readable else { return }
         Task { [weak self] in
             let center = UNUserNotificationCenter.current()
             let pending = await center.pendingNotificationRequests()

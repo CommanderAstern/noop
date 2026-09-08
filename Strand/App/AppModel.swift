@@ -708,6 +708,9 @@ final class AppModel: ObservableObject {
     /// Prefers the strap's reported HR; falls back to 60000/R-R. Clamps to a plausible
     /// 30–220 range (rejects 0 / garbage spikes) and publishes the window MEDIAN.
     private func ingestHR() {
+        // Check the workout cue during Bluetooth-driven execution, including while locked.
+        // runtimeTick rejects missed deadlines after an execution gap; it never queues a retry.
+        strengthWorkouts.runtimeTick()
         var inst: Double?
         if let hr = live.heartRate, hr >= 30, hr <= 220 {
             inst = Double(hr)
