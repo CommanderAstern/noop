@@ -1,0 +1,86 @@
+name: NOOP Lab iPhone release
+
+on:
+  push:
+    branches: [personal]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noop-lab-release
+  cancel-in-progress: false
+
+jobs:
+  iphone:
+    if: github.repository == 'CommanderAstern/noop' && github.ref == 'refs/heads/personal'
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      VERSION: 1.${{ github.run_number }}.${{ github.run_attempt }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Test personal release tooling
+        run: python3 -m unittest discover -s Tools/personal -p 'test_*.py' -v
+
+      - name: Test strap protocol
+        run: swift test --package-path Packages/WhoopProtocol
+
+      - name: Test analytics
+        run: swift test --package-path Packages/StrandAnalytics
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build iPhone app and widgets
+        run: |
+          xcodebuild -scheme NOOPiOS -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath build/personal \
+            BUNDLE_ID_PREFIX=com.commanderastern \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            build > "$RUNNER_TEMP/noop-build.log" 2>&1 || {
+              tail -n 100 "$RUNNER_TEMP/noop-build.log"
+              exit 1
+            }
+
+      - name: Package and validate the app
+        run: |
+          mkdir -p dist/Payload
+          APP=$(find build/personal/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' -type d | head -1)
+          test -n "$APP"
+          rm -rf "$APP/Watch"
+          python3 Tools/personal/release_source.py rename "$APP"
+          Tools/prepare-ios-sideload-app.sh "$APP"
+          cp -R "$APP" dist/Payload/
+          (cd dist && zip -qr "NOOP-Lab-${VERSION}.ipa" Payload)
+          python3 Tools/personal/release_source.py source \
+            "dist/NOOP-Lab-${VERSION}.ipa" dist/altstore-source.json
+          (cd dist && shasum -a 256 "NOOP-Lab-${VERSION}.ipa" > SHA256SUMS.txt)
+
+      - name: Publish the verified build and SideStore source
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Personal NOOP Lab build ${VERSION} from commit ${GITHUB_SHA}.
+
+          Built from CommanderAstern/noop, based on ryanbr/noop. Installs beside NOOP with separate app data.
+
+          Add this source in SideStore:
+          https://github.com/CommanderAstern/noop/releases/latest/download/altstore-source.json
+
+          Includes protocol and analytics test checks, an iPhone Release build, widgets, and an unsigned IPA for SideStore signing.
+          Keep older releases for rollback. Export a backup inside NOOP before testing changes.
+          EOF
+          gh release create "v${VERSION}" \
+            "dist/NOOP-Lab-${VERSION}.ipa" dist/altstore-source.json dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "NOOP Lab ${VERSION}" --notes-file "$RUNNER_TEMP/release-notes.md" \
+            --draft
+          gh release edit "v${VERSION}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
