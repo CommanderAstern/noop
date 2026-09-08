@@ -118,9 +118,18 @@ struct StrengthCustomExerciseView: View {
     @State private var name = ""
     @State private var equipment = ""
     @State private var photo: Data?
+    @State private var photoError: String?
     #if os(iOS)
     @State private var selection: PhotosPickerItem?
+    @State private var resolvedSelection: PhotosPickerItem?
     #endif
+    private var loadingPhoto: Bool {
+        #if os(iOS)
+        selection != resolvedSelection
+        #else
+        false
+        #endif
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -128,24 +137,33 @@ struct StrengthCustomExerciseView: View {
                 TextField("Equipment / gym machine name", text: $equipment)
                 #if os(iOS)
                 PhotosPicker(photo == nil ? "Add your machine photo" : "Change photo", selection: $selection, matching: .images)
-                    .onChange(of: selection) { item in
-                        Task {
-                            guard let data = try? await item?.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                    .task(id: selection) {
+                        let item = selection
+                        guard let item else { return }
+                        let data = try? await item.loadTransferable(type: Data.self)
+                        guard !Task.isCancelled, selection == item else { return }
+                        photo = nil; photoError = nil
+                        if let data, let image = UIImage(data: data) {
                             let scale = min(1, 512 / max(image.size.width, image.size.height))
                             let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-                            let result = UIGraphicsImageRenderer(size: size).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }.jpegData(compressionQuality: 0.7)
+                            let format = UIGraphicsImageRendererFormat(); format.scale = 1
+                            let result = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }.jpegData(compressionQuality: 0.7)
                             if let result, result.count <= 1_000_000 { photo = result }
                         }
+                        if photo == nil { photoError = "Photo could not be loaded. Choose another, or save without a photo." }
+                        resolvedSelection = item
                     }
                 #endif
-                if photo != nil { Text("Photo ready · saved on this device").font(.caption) }
+                if loadingPhoto { ProgressView("Loading photo…") }
+                else if photo != nil { Text("Photo ready · saved on this device").font(.caption) }
+                if let photoError { Text(photoError).font(.caption) }
                 Text("Give different gym machines distinct names so their weights and records remain comparable.").font(.caption)
             }.navigationTitle("Custom exercise").toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") {
                     var entry = StrengthExercise(name: name.trimmingCharacters(in: .whitespacesAndNewlines), equipment: equipment.trimmingCharacters(in: .whitespacesAndNewlines)); entry.photo = photo
                     if tracker.change({ $0.customExercises.append(entry) }) { saved(entry); dismiss() }
-                }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || loadingPhoto) }
             }
         }
     }

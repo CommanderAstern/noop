@@ -25,6 +25,7 @@ struct StrandiOSApp: App {
     /// observes it and presents the Devices manager.
     @StateObject private var router: NavRouter
     @State private var liveActivity = LiveActivityController()
+    @AppStorage("liveActivity.enabled") private var strengthActivitiesEnabled = true
     @Environment(\.scenePhase) private var scenePhase
     /// Appearance preference (System/Light/Dark). Default follows the OS; the Settings picker writes it.
     @AppStorage(AppearanceMode.storageKey) private var appearanceRaw = AppearanceMode.system.rawValue
@@ -193,6 +194,7 @@ struct StrandiOSApp: App {
                     )
                 }
                 .onReceive(model.strengthWorkouts.$state) { state in liveActivity.updateStrength(state) }
+                .onChange(of: strengthActivitiesEnabled) { _, _ in liveActivity.updateStrength(model.strengthWorkouts.state) }
                 // End the Live Activity the moment the link drops, even if no further HR tick arrives.
                 .onReceive(model.live.$connected) { isConnected in
                     // #911: same shared anchor as the heartRate site above, so the Live Activity, the
@@ -301,6 +303,7 @@ struct StrandiOSApp: App {
         // safe no-op until the user opts in.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                liveActivity.updateStrength(model.strengthWorkouts.state)
                 model.drainPendingIntents(router: router)
                 // Re-arm the strap's smart alarm on foreground: the firmware alarm is a single instant
                 // and iOS can't re-arm it while suspended, so it would otherwise fire once and stop.

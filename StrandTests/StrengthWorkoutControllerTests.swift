@@ -5,6 +5,37 @@ import StrengthTracking
 @MainActor
 final class StrengthWorkoutControllerTests: XCTestCase {
     private let runtimeEpoch = ContinuousClock.now
+    func testConstantHeartRateRemainsFreshWithoutRepublishingValues() {
+        let live = LiveState(); live.connected = true
+        let start = Date(timeIntervalSince1970: 1000)
+        var callbacks = 0; live.onHeartRateReceived = { callbacks += 1 }
+        for second in 0...20 { live.receiveHeartRate(118, at: start.addingTimeInterval(Double(second))) }
+        XCTAssertEqual(callbacks, 21)
+        XCTAssertEqual(live.currentHeartRate(at: start.addingTimeInterval(25)), 118)
+        live.receiveHeartRate(0, at: start.addingTimeInterval(29))
+        XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(31)))
+        live.receiveHeartRate(118, at: start.addingTimeInterval(32)); live.connected = false
+        XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(33)))
+    }
+    func testSetStartAndUndoSurviveRestartAndFailedSave() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let second = StrengthSet(reps: 10, kilograms: 40)
+        XCTAssertTrue(tracker.change { $0.active!.movements[0].sets.append(second) })
+        let movement = tracker.state.active!.movements[0]
+        XCTAssertTrue(tracker.change { $0.startSet(movementID: movement.id, setID: second.id, now: original.rest!.deadline) })
+        let restored = StrengthWorkoutController(storage: disk, platformServices: false)
+        XCTAssertEqual(restored.state.active?.nextSet?.set.startedAt, original.rest!.deadline)
+        XCTAssertNil(restored.state.rest)
+        try FileManager.default.removeItem(at: disk.url)
+        try FileManager.default.createDirectory(at: disk.url, withIntermediateDirectories: true)
+        let before = restored.state
+        XCTAssertFalse(restored.change { $0.undoLastSet() })
+        XCTAssertEqual(restored.state, before)
+        try FileManager.default.removeItem(at: disk.url)
+        XCTAssertTrue(restored.change { $0.undoLastSet() })
+        XCTAssertNil(try disk.load().active?.movements[0].sets[0].completedAt)
+    }
     func fixture() throws -> (StrengthFileStore, StrengthState) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }

@@ -42,6 +42,6 @@ private struct StrengthActivityClock: View {
     var body: some View {
         if let begin = state.restStart, let end = state.restEnd, end >= begin {
             Text(timerInterval: begin...end, countsDown: true, showsHours: false).monospacedDigit()
-        } else { Text(start, style: .timer).monospacedDigit() }
+        } else { Text(state.restStart ?? start, style: .timer).monospacedDigit() }
     }
 }

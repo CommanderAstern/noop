@@ -78,12 +78,13 @@ public struct StrengthSession: Codable, Equatable, Identifiable {
     public var startedAt: Date
     public var finishedAt: Date?
     public var restIntervals: [StrengthRestInterval]?
+    public var restCoverageIncomplete: Bool?
     public var notes: String?
     public var restSeconds: Int = 90
     public var movements: [StrengthMovement] = []
     public var unit: LiftingUnit = .kg
     public var completedSets: Int { movements.reduce(0) { $0 + $1.sets.filter { $0.completedAt != nil }.count } }
-    public init(now: Date, unit: LiftingUnit) { startedAt = now; self.unit = unit }
+    public init(now: Date, unit: LiftingUnit) { startedAt = now; self.unit = unit; restIntervals = [] }
 }
 
 public struct StrengthRest: Codable, Equatable, Identifiable {
@@ -132,6 +133,7 @@ public struct StrengthState: Codable, Equatable {
               !session.movements.flatMap(\.sets).contains(where: { $0.id != setID && $0.startedAt != nil && $0.completedAt == nil }),
               session.movements[m].sets[s].isValid else { return }
         let finished = max(now, session.movements[m].sets[s].startedAt ?? session.startedAt)
+        session.prepareRestHistory(countdown: rest)
         session.closeRest(at: finished, nextSetID: setID, reason: .unknownStart)
         session.movements[m].sets[s].completedAt = finished
         let seconds = session.movements[m].restSeconds ?? restSeconds
@@ -181,6 +183,7 @@ public struct StrengthState: Codable, Equatable {
 
     public mutating func finish(now: Date) {
         guard var session = active, session.completedSets > 0 else { return }
+        session.prepareRestHistory(countdown: rest)
         session.finishedAt = max(now, session.startedAt, session.movements.flatMap(\.sets).compactMap(\.completedAt).max() ?? session.startedAt)
         session.closeRest(at: session.finishedAt!, nextSetID: nil, reason: .finished)
         history.insert(session, at: 0)
@@ -230,12 +233,15 @@ public enum StrengthStorageError: Error { case unsupportedVersion, invalidData }
 
 /// One atomic document contains both active state and history: finishing cannot lose a session
 /// between an archive write and an active-session clear. Read failures never silently reset data.
-public struct StrengthFileStore {
+public final class StrengthFileStore {
     public let url: URL
+    private var diskVersion: Int?
     public init(url: URL) { self.url = url }
     public func load() throws -> StrengthState {
         guard FileManager.default.fileExists(atPath: url.path) else { return StrengthState() }
-        let state = try JSONDecoder().decode(StrengthState.self, from: Data(contentsOf: url)).validated()
+        var state = try JSONDecoder().decode(StrengthState.self, from: Data(contentsOf: url)).validated()
+        diskVersion = state.version
+        state.restoreLegacyRest()
         // Migrate existing installs while unlocked, before any locked countdown needs to commit.
         try prepareDirectory()
         return state
@@ -244,10 +250,11 @@ public struct StrengthFileStore {
         let data = try JSONEncoder().encode(state.validated())
         try prepareDirectory()
         // Retain the readable v1 document once before v2's first write. Never auto-restore a backup.
-        if state.version == 2, let previous = try? Data(contentsOf: url),
-           let old = try? JSONDecoder().decode(StrengthState.self, from: previous), old.version == 1 {
+        if state.version == 2, diskVersion != 2, let previous = try? Data(contentsOf: url) {
+            struct Header: Decodable { let version: Int }
+            let version = try JSONDecoder().decode(Header.self, from: previous).version
             let backup = url.deletingLastPathComponent().appendingPathComponent("before-v2.json")
-            if !FileManager.default.fileExists(atPath: backup.path) {
+            if version == 1, !FileManager.default.fileExists(atPath: backup.path) {
                 #if os(iOS)
                 try previous.write(to: backup, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
                 #else
@@ -260,6 +267,7 @@ public struct StrengthFileStore {
         #else
         try data.write(to: url, options: .atomic)
         #endif
+        diskVersion = state.version
     }
 
     private func prepareDirectory() throws {

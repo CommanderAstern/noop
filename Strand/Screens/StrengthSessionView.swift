@@ -16,7 +16,7 @@ struct StrengthSessionView: View {
     @State private var edit: SetSelection?
     @State private var restMovement: StrengthMovement?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    struct SetSelection: Identifiable { let movement: StrengthMovement; let set: StrengthSet; var id: UUID { set.id } }
+    struct SetSelection: Identifiable { let movement: StrengthMovement; let set: StrengthSet; var id: UUID { self.set.id } }
 
     var body: some View {
         if let session = tracker.state.active {

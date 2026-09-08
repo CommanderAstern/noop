@@ -98,4 +98,47 @@ final class StrengthFlowTests: XCTestCase {
         next.history[0].movements[0].sets[2].kind = .warmup
         XCTAssertTrue(StrengthProgress.records(in: next.history[0], history: [prior]).isEmpty)
     }
+    func testDuplicateExerciseBlocksAwardOnlyTheSessionBest() {
+        var first = state(); complete(&first, 1, 10); first.finish(now: now.addingTimeInterval(50))
+        var next = state(); next.active!.startedAt = now.addingTimeInterval(100)
+        next.active!.movements[0].sets[1].kilograms = 100
+        let extra = StrengthMovement(exercise: StrengthExercise.catalog[1], sets: [StrengthSet(reps: 8, kilograms: 65)])
+        next.active!.movements.append(extra)
+        complete(&next, 1, 110)
+        next.completeSet(movementID: extra.id, setID: extra.sets[0].id, now: now.addingTimeInterval(150))
+        next.finish(now: now.addingTimeInterval(200))
+        let records = StrengthProgress.records(in: next.history[0], history: first.history)
+        XCTAssertEqual(records.count, 2)
+        XCTAssertTrue(records.allSatisfy { $0.kilograms == 100 })
+    }
+    func testLegacyCountdownKeepsIdentityAndUnknownPriorRest() throws {
+        var old = state(); complete(&old, 0, 30)
+        old.version = 1; old.active!.restIntervals = nil
+        let countdown = old.rest
+        old.restoreLegacyRest()
+        XCTAssertEqual(old.rest, countdown)
+        XCTAssertEqual(old.active?.openRest?.startedAt, now.addingTimeInterval(30))
+        XCTAssertEqual(old.active?.openRest?.plannedSeconds, 120)
+        start(&old, 1, 180); complete(&old, 1, 210)
+        old.finish(now: now.addingTimeInterval(240))
+        XCTAssertEqual(old.history[0].restIntervals?.first?.actualSeconds, 150)
+        XCTAssertNil(old.history[0].actualRest)
+        _ = try old.validated()
+    }
+    func testMigrationBacksUpOriginalBytesOnce() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("v1.json")
+        var old = state(); old.version = 1; old.active!.restIntervals = nil
+        let bytes = try JSONEncoder().encode(old); try bytes.write(to: url)
+        let store = StrengthFileStore(url: url)
+        var upgraded = try store.load(); upgraded.version = 2
+        try store.save(upgraded)
+        let backup = folder.appendingPathComponent("before-v2.json")
+        XCTAssertEqual(try Data(contentsOf: backup), bytes)
+        upgraded.active!.notes = "Next edit"; try store.save(upgraded)
+        XCTAssertEqual(try Data(contentsOf: backup), bytes)
+        XCTAssertEqual(try store.load().active?.notes, "Next edit")
+    }
 }

@@ -37,7 +37,7 @@ struct StrengthWorkoutMetrics {
 
     static func calculate(session: StrengthSession, samples: [HRSample], now: Date,
                           maxHR: Double, restingHR: Double, sex: String,
-                          method: StrainScorer.Method, truncated: Bool = false) -> Self {
+                          method: StrainScorer.Method, truncated: Bool = false, zones: HRZoneSet? = nil) -> Self {
         let start = session.startedAt.timeIntervalSince1970
         let end = (session.finishedAt ?? now).timeIntervalSince1970
         var unique: [Int: HRSample] = [:]
@@ -62,12 +62,13 @@ struct StrengthWorkoutMetrics {
             // do not credit a sample with a long disconnect or extrapolate beyond the last reading.
             var weightedBPM = 0.0
             var coveredSeconds = 0
+            let displayZones = zones ?? HRZones.zones(maxHR: maxHR)
             for (sample, next) in zip(accepted, accepted.dropFirst()) {
                 let seconds = next.ts - sample.ts
                 guard (1...60).contains(seconds) else { continue }
                 weightedBPM += Double(sample.bpm * seconds)
                 coveredSeconds += seconds
-                result.zoneSeconds[HRZones.zones(maxHR: maxHR).zoneNumber(forBPM: Double(sample.bpm))] += seconds
+                result.zoneSeconds[displayZones.zoneNumber(forBPM: Double(sample.bpm))] += seconds
             }
             if coveredSeconds > 0 {
                 result.coveredSeconds = coveredSeconds

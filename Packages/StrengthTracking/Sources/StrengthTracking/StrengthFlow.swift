@@ -25,11 +25,24 @@ extension StrengthSession {
     public var volumeKilograms: Double { movements.flatMap(\.sets).filter { $0.completedAt != nil }.reduce(0) { $0 + $1.kilograms * Double($1.reps) } }
     public var workingVolume: Double { movements.flatMap(\.sets).filter { $0.completedAt != nil && $0.kind == .working }.reduce(0) { $0 + $1.kilograms * Double($1.reps) } }
     public var actualRest: TimeInterval? {
-        guard let restIntervals else { return nil }
+        guard let restIntervals, restCoverageIncomplete != true else { return nil }
         guard !restIntervals.contains(where: { $0.endedAt != nil && $0.actualSeconds == nil }) else { return nil }
         return restIntervals.compactMap(\.actualSeconds).reduce(0, +)
     }
     public var openRest: StrengthRestInterval? { restIntervals?.last(where: { $0.endedAt == nil }) }
+    mutating func prepareRestHistory(countdown: StrengthRest?) {
+        guard restIntervals == nil else { return }
+        restCoverageIncomplete = completedSets > 0
+        restIntervals = []
+        // A legacy countdown proves this one rest's start, but not earlier rests or set starts.
+        if let countdown, countdown.sessionID == id,
+           let completed = movements.flatMap(\.sets).first(where: { $0.id == countdown.setID })?.completedAt {
+            let duration = countdown.deadline.timeIntervalSince(completed)
+            if duration >= 0, duration <= 1800 {
+                restIntervals = [StrengthRestInterval(setID: countdown.setID, startedAt: completed, plannedSeconds: Int(duration.rounded()))]
+            }
+        }
+    }
     public var nextSet: (movement: StrengthMovement, set: StrengthSet)? {
         for movement in movements {
             if let set = movement.sets.first(where: { $0.startedAt != nil && $0.completedAt == nil }) { return (movement, set) }
@@ -49,12 +62,14 @@ extension StrengthSession {
 }
 
 extension StrengthState {
+    public mutating func restoreLegacyRest() { active?.prepareRestHistory(countdown: rest) }
     public mutating func startSet(movementID: UUID, setID: UUID, now: Date) {
         guard var session = active,
               !session.movements.flatMap(\.sets).contains(where: { $0.startedAt != nil && $0.completedAt == nil }),
               let m = session.movements.firstIndex(where: { $0.id == movementID }),
               let s = session.movements[m].sets.firstIndex(where: { $0.id == setID }),
               session.movements[m].sets[s].completedAt == nil else { return }
+        session.prepareRestHistory(countdown: rest)
         session.closeRest(at: now, nextSetID: setID, reason: .nextSet)
         session.movements[m].sets[s].startedAt = max(now, session.startedAt)
         active = session; rest = nil
@@ -99,20 +114,22 @@ public enum StrengthProgress {
     /// First observations establish a baseline; ties and unit display changes are not records.
     public static func records(in session: StrengthSession, history: [StrengthSession]) -> [StrengthRecord] {
         var records: [StrengthRecord] = []
-        for movement in session.movements {
+        var seen: Set<UUID> = []
+        for movement in session.movements where seen.insert(movement.exercise.id).inserted {
+            let current = session.movements.filter { $0.exercise.id == movement.exercise.id }.flatMap(\.sets)
             let previous = history.filter { $0.id != session.id && ($0.finishedAt ?? .distantFuture) < session.startedAt }
                 .flatMap(\.movements).filter { $0.exercise.id == movement.exercise.id }.flatMap(\.sets)
                 .filter { $0.kind == .working && $0.completedAt != nil && $0.kilograms > 0 }
             if let previousMax = previous.map(\.kilograms).max(),
-               let best = movement.sets.filter({ $0.kind == .working && $0.completedAt != nil }).max(by: { $0.kilograms < $1.kilograms }),
+               let best = current.filter({ $0.kind == .working && $0.completedAt != nil }).max(by: { $0.kilograms < $1.kilograms }),
                best.kilograms > previousMax + 0.000001 {
                 records.append(StrengthRecord(exercise: movement.exercise, setID: best.id, reps: best.reps,
                     kilograms: best.kilograms, previousKilograms: previousMax, heaviest: true))
             }
-            let reps = Set(movement.sets.filter { $0.kind == .working && $0.completedAt != nil }.map(\.reps))
+            let reps = Set(current.filter { $0.kind == .working && $0.completedAt != nil }.map(\.reps))
             for count in reps.sorted() {
                 guard let baseline = previous.filter({ $0.reps == count }).map(\.kilograms).max(),
-                      let best = movement.sets.filter({ $0.reps == count && $0.kind == .working && $0.completedAt != nil })
+                      let best = current.filter({ $0.reps == count && $0.kind == .working && $0.completedAt != nil })
                         .max(by: { $0.kilograms < $1.kilograms }), best.kilograms > baseline + 0.000001 else { continue }
                 records.append(StrengthRecord(exercise: movement.exercise, setID: best.id, reps: count,
                     kilograms: best.kilograms, previousKilograms: baseline))

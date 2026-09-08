@@ -95,7 +95,14 @@ struct StrengthSummaryView: View {
         #endif
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .sheet(item: $routine) { StrengthRoutineEditor(routine: $0, tracker: tracker) }
-        .task(id: session.id) { metrics = await tracker.loadMetrics(session); loaded = true }
+        .task(id: session.id) {
+            while !Task.isCancelled {
+                let refreshed = await tracker.loadMetrics(session)
+                guard !Task.isCancelled else { return }
+                metrics = refreshed; loaded = true
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            }
+        }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedMovement)
     }
     private func selectionButton(_ name: String, id: UUID?) -> some View {
