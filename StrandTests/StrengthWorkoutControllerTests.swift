@@ -193,4 +193,18 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(try disk.load().rest?.consumed, true)
     }
 
+
+    func testUnlockJustBeforeDeadlineKeepsFutureCueEligible() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.resumeForeground(now: deadline.addingTimeInterval(-0.1), instant: runtimeEpoch)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.15),
+            instant: runtimeEpoch.advanced(by: .milliseconds(250)))
+        XCTAssertEqual(attempts, 1)
+    }
+
 }

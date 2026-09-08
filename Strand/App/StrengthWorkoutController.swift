@@ -99,10 +99,11 @@ final class StrengthWorkoutController: ObservableObject {
         tick(allowWrist: gap.map { $0 >= .zero && $0 <= .seconds(2) } ?? false, now: now)
     }
 
-    func resumeForeground(now: Date = Date()) {
+    func resumeForeground(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
         // Never replay a deadline on unlocking, even if it falls inside the two-second grace.
-        lastRuntimeTick = nil
         tick(allowWrist: false, now: now)
+        // A still-future deadline remains eligible, including when unlocking just before zero.
+        lastRuntimeTick = instant
     }
 
     func tick(allowWrist: Bool, now: Date = Date()) {
