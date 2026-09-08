@@ -134,3 +134,10 @@ the automated model tests do not claim to simulate those system frameworks.
     (`Strand/Screens/StrengthSessionView.swift:177`, same review). Live, table and
     accessibility labels now share the movement's same-kind ordinal. A regression
     includes interleaved warm-ups and working sets.
+31. **P2 — Routine editor still numbers working sets by raw index**
+    (`Strand/Screens/StrengthRoutineEditor.swift:25`, GitHub Codex review of `8a87d97`).
+    The editor now uses the same tested movement ordinal as Live and Exercises.
+32. **Editor follow-up — Add set can copy a warm-up kind**
+    (`Strand/Screens/StrengthRoutineEditor.swift:29`, local inspection). Add set now
+    copies the last working target or creates a default working set; Add warm-up
+    remains the explicit way to create a warm-up.

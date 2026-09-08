@@ -18,15 +18,15 @@ struct StrengthRoutineEditor: View {
                 }
                 ForEach($routine.movements) { $movement in
                     Section {
-                        ForEach(Array(movement.sets.enumerated()), id: \.element.id) { index, set in
+                        ForEach(movement.sets) { set in
                             Button {
                                 selection = StrengthSessionView.SetSelection(movement: movement, set: set)
                             } label: {
-                                HStack { Text(set.kind == .warmup ? "Warm-up" : "Set \(index + 1)"); Spacer(); Text("\(strengthWeight(set.kilograms, unit: routine.unit)) \(routine.unit.rawValue) × \(set.reps)"); Image(systemName: "pencil") }
+                                HStack { Text(set.kind == .warmup ? "Warm-up" : "Set \((movement.ordinal(of: set.id) ?? 0) + 1)"); Spacer(); Text("\(strengthWeight(set.kilograms, unit: routine.unit)) \(routine.unit.rawValue) × \(set.reps)"); Image(systemName: "pencil") }
                             }.buttonStyle(.plain)
                         }.onDelete { movement.sets.remove(atOffsets: $0) }
                         HStack {
-                            Button("Add set") { movement.sets.append(movement.sets.last?.fresh() ?? StrengthSet()) }
+                            Button("Add set") { movement.sets.append(movement.sets.last(where: { $0.kind == .working })?.fresh() ?? StrengthSet()) }
                             Spacer()
                             Button("Add warm-up") { var set = StrengthSet(reps: 12); set.kind = .warmup; movement.sets.insert(set, at: 0) }
                         }
