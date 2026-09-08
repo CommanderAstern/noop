@@ -5208,6 +5208,17 @@ public final class BLEManager: NSObject, ObservableObject {
     /// is a note for future refinement; the preset id=2 form is simpler and confirmed to buzz on-device.
     ///
     /// Haptic firing cannot be verified in the simulator (no strap motor). Test on-device only.
+    /// Rest cues deliberately use ONE existing haptic command, not buzzStrapOnce's additional
+    /// RUN_ALARM. No alarm register is changed, nothing is queued for reconnect, and send() keeps
+    /// its existing WHOOP 5/MG opcode + MaverickHaptics mapping. Physical delivery needs strap testing.
+    var strengthRestCueReady: Bool { commandChannelReady && state.bonded }
+
+    func buzzStrengthRestOnce() {
+        guard strengthRestCueReady else { return }
+        send(.runHapticsPattern, payload: [2, 1, 0, 0, 0], writeType: .withResponse)
+        log("Strength rest: one haptic command sent; physical delivery unconfirmed (no alarm, no retry)")
+    }
+
     func buzzStrapOnce() {
         send(.runHapticsPattern, payload: [2, 3, 0, 0, 0], writeType: .withResponse)  // patternId=2, 3 loops (5/MG: send() remaps to the maverick notify buzz)
         if selectedModel.deviceFamily == .whoop5 {

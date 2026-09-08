@@ -29,9 +29,11 @@ struct BackupSyncView: View {
     var body: some View {
         ScreenScaffold(
             title: "Backup & Sync",
-            subtitle: "Save a full backup to a folder you choose - point it at Google Drive, iCloud or Dropbox for off-device sync."
+            subtitle: "Save a database backup to a folder you choose - point it at Google Drive, iCloud or Dropbox for off-device sync."
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionGap) {
+                Text("Strength workouts, routines and rest timers are stored separately. These database backups do not include or restore strength data.")
+                    .font(StrandFont.body).foregroundStyle(StrandPalette.statusWarning)
                 folderCard
                 autoCard
                 restoreCard
@@ -51,13 +53,13 @@ struct BackupSyncView: View {
         }
         // Explicit in-app destructive confirmation BEFORE any overwrite (must-fix #2).
         .alert("Restore this backup?", isPresented: $confirmRestore, presenting: pendingRestore) { snap in
-            Button("Replace all data", role: .destructive) { runRestore(snap) }
+            Button("Replace database data", role: .destructive) { runRestore(snap) }
             Button("Cancel", role: .cancel) { pendingRestore = nil }
         } message: { snap in
             // A hand-named file with no resolved date (timeMs 0) confirms by NAME, not "1 Jan 1970".
             Text(snap.timeMs > 0
-                ? "Replace all current data with the backup from \(absoluteTime(snap.timeMs))? This cannot be undone."
-                : "Replace all current data with the backup \(snap.name)? This cannot be undone.")
+                ? "Replace the current database with the backup from \(absoluteTime(snap.timeMs))? Strength data is unchanged. This cannot be undone."
+                : "Replace the current database with the backup \(snap.name)? Strength data is unchanged. This cannot be undone.")
         }
     }
 
