@@ -13,7 +13,7 @@ MARKER = '<!-- codex-pull-request-review-summary -->'
 CONTEXT = 'codex-review'
 
 def api(path, *args):
-    result = subprocess.run(['gh', 'api', path, *args], capture_output=True, text=True, check=True)
+    result = subprocess.run(['gh', 'api', path, *args], capture_output=True, text=True, encoding="utf-8", check=True)
     return json.loads(result.stdout)
 
 def pages(path):
