@@ -9,7 +9,9 @@ import OuraProtocol
 /// `@MainActor` so SwiftUI views observe it safely; mutators are called on the main queue.
 @MainActor
 public final class LiveState: ObservableObject {
-    @Published public var connected: Bool = false
+    @Published public var connected: Bool = false {
+        didSet { if !connected { heartRateReceivedAt = nil } }
+    }
     // NOTE: do NOT auto-clear `pairingHint` when `bonded` flips true. On a 5/MG, `bonded` is also set by
     // the live-HR shortcut (BLEManager — HR over the unbonded standard profile), so clearing the hint
     // there hides the still-accurate "free the strap" guidance from users who are streaming HR but never
@@ -53,6 +55,22 @@ public final class LiveState: ObservableObject {
     /// radio-off / connect-fail / disconnect). Twin of the Android LiveState.streamingLiveHR.
     @Published public var streamingLiveHR: Bool = false
     @Published public var heartRate: Int? = nil
+    /// Receipt liveness is independent of value publication; constant BPM is still a fresh stream.
+    private var heartRateReceivedAt: Date?
+    var onHeartRateReceived: (() -> Void)?
+    func receiveHeartRate(_ bpm: Int, at now: Date = Date(), publishRepeatedValue: Bool = true) {
+        guard (30...220).contains(bpm) else { return }
+        heartRateReceivedAt = now
+        // Preserve each source's established publisher cadence. WHOOP's raw flood opts out
+        // of repeated value publication; other sources use those events for workout sampling.
+        if publishRepeatedValue || heartRate != bpm { heartRate = bpm }
+        onHeartRateReceived?()
+    }
+    func currentHeartRate(at now: Date = Date()) -> Int? {
+        guard connected, let received = heartRateReceivedAt,
+              (0..<10).contains(now.timeIntervalSince(received)) else { return nil }
+        return heartRate
+    }
     /// Whether the heavy R10/R11 realtime burst is currently armed (the "live feed"). Tracks the
     /// realtime INTENT (startRealtime/stopRealtime), NOT `heartRate` — the lightweight 0x2A37 profile
     /// keeps setting heartRate while bonded, so a heartRate-driven toggle could never read "off". The

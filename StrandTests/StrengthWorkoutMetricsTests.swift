@@ -59,4 +59,14 @@ final class StrengthWorkoutMetricsTests: XCTestCase {
         XCTAssertEqual(session.liftedKilograms, 480)
         XCTAssertEqual(session.unit.kilograms(session.unit.display(session.liftedKilograms)), 480, accuracy: 0.00001)
     }
+    func testCustomZonesCountOnlyRecordedIntervals() {
+        let zones = HRZones.zones(maxHR: 190, customLowerBounds: [80, 100, 120, 140, 160])
+        let samples = [HRSample(ts: 1000, bpm: 110), HRSample(ts: 1030, bpm: 150),
+                       HRSample(ts: 1060, bpm: 150), HRSample(ts: 1500, bpm: 170)]
+        let result = StrengthWorkoutMetrics.calculate(session: StrengthSession(now: start, unit: .kg),
+            samples: samples, now: start.addingTimeInterval(1000), maxHR: 190, restingHR: 60,
+            sex: "male", method: .edwards, zones: zones)
+        XCTAssertEqual(result.coveredSeconds, 60)
+        XCTAssertEqual(result.zoneSeconds, [0, 0, 30, 0, 30, 0])
+    }
 }

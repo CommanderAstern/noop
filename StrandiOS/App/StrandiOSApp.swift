@@ -25,6 +25,7 @@ struct StrandiOSApp: App {
     /// observes it and presents the Devices manager.
     @StateObject private var router: NavRouter
     @State private var liveActivity = LiveActivityController()
+    @AppStorage("liveActivity.enabled") private var strengthActivitiesEnabled = true
     @Environment(\.scenePhase) private var scenePhase
     /// Appearance preference (System/Light/Dark). Default follows the OS; the Settings picker writes it.
     @AppStorage(AppearanceMode.storageKey) private var appearanceRaw = AppearanceMode.system.rawValue
@@ -149,6 +150,13 @@ struct StrandiOSApp: App {
         }
     }
 
+    private func refreshHRActivity() {
+        let day = model.repo.cachedWidgetAnchor()
+        liveActivity.update(bpm: model.live.currentHeartRate(),
+            recovery: day?.recovery.map { Int($0.rounded()) }, connected: model.live.connected,
+            effort: day?.strain.map { Int($0.rounded()) })
+    }
+
     var body: some Scene {
         WindowGroup {
             iOSRootView()
@@ -190,6 +198,14 @@ struct StrandiOSApp: App {
                         connected: model.live.connected,
                         effort: day?.strain.map { Int($0.rounded()) }
                     )
+                }
+                .onReceive(model.strengthWorkouts.$state) { state in
+                    liveActivity.updateStrength(state)
+                    if state.active == nil { refreshHRActivity() }
+                }
+                .onChange(of: strengthActivitiesEnabled) { _, _ in
+                    liveActivity.updateStrength(model.strengthWorkouts.state)
+                    refreshHRActivity()
                 }
                 // End the Live Activity the moment the link drops, even if no further HR tick arrives.
                 .onReceive(model.live.$connected) { isConnected in
@@ -265,6 +281,12 @@ struct StrandiOSApp: App {
                 // HealthKit-free payload. Filter on the host so other future schemes don't trip the
                 // importer; macOS never registers the scheme so this stays iOS-only.
                 .onOpenURL { url in
+                    if url.scheme == "noop", url.host == "strength" {
+                        let session = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "session" })?.value
+                        if let session, let id = UUID(uuidString: session) {
+                            model.strengthWorkouts.requestPresentation(sessionID: id)
+                        } else if session == nil { model.strengthWorkouts.requestPresentation() }
+                    }
                     if url.host == "import-health" {
                         model.handleHealthImportURL(url)
                     }
@@ -293,6 +315,8 @@ struct StrandiOSApp: App {
         // safe no-op until the user opts in.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                liveActivity.updateStrength(model.strengthWorkouts.state)
+                refreshHRActivity()
                 model.drainPendingIntents(router: router)
                 // Re-arm the strap's smart alarm on foreground: the firmware alarm is a single instant
                 // and iOS can't re-arm it while suspended, so it would otherwise fire once and stop.
@@ -361,6 +385,7 @@ struct StrandiOSApp: App {
 /// excluded `RootView()` sidebar for `RootTabView()`. The shared `OnboardingWizard`, `TermsGateView`,
 /// `WhatsNewView`, `AppChangelog`, and `Terms` symbols all compile into the iOS target unchanged.
 private struct iOSRootView: View {
+    @EnvironmentObject private var model: AppModel
     @AppStorage("noop.onboarded") private var onboarded = false
     @AppStorage("noop.lastSeenChangelogVersion") private var lastSeenChangelog = ""
     @AppStorage("noop.acceptedTermsVersion") private var acceptedTerms = ""
@@ -393,7 +418,7 @@ private struct iOSRootView: View {
         ZStack {
             RootTabView(homeScreenQuickActionsEnabled:
                 demoBypass || (onboarded && acceptedTerms == Terms.currentVersion
-                    && automaticLaunchSheetResolved))
+                    && automaticLaunchSheetResolved), strength: model.strengthWorkouts)
             if !onboarded && !demoBypass {
                 OnboardingWizard(onFinished: {
                     onboarded = true
@@ -496,7 +521,15 @@ enum DemoScreens {
         case "strength-home": return AnyView(StrengthDemoView(mode: "home"))
         case "strength-active": return AnyView(StrengthDemoView(mode: "active"))
         case "strength-picker": return AnyView(StrengthDemoView(mode: "picker"))
+        case "strength-machines": return AnyView(StrengthDemoView(mode: "machines"))
         case "strength-history": return AnyView(StrengthDemoView(mode: "history"))
+        case "strength-summary": return AnyView(StrengthDemoView(mode: "summary"))
+        case "strength-progress": return AnyView(StrengthDemoView(mode: "progress"))
+        case "strength-exercises": return AnyView(StrengthDemoView(mode: "exercises"))
+        case "strength-rest": return AnyView(StrengthDemoView(mode: "rest"))
+        case "strength-warmup": return AnyView(StrengthDemoView(mode: "warmup"))
+        case "strength-summary-detail": return AnyView(StrengthDemoView(mode: "summary-detail"))
+        case "strength-achievements": return AnyView(StrengthDemoView(mode: "achievements"))
         case "health":   return AnyView(HealthView())
         case "insights": return AnyView(InsightsView())
         case "explore":  return AnyView(MetricExplorerView())

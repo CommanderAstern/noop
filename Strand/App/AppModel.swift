@@ -230,6 +230,11 @@ final class AppModel: ObservableObject {
             guard UserDefaults.standard.bool(forKey: Self.wristAlertsMasterKey) else { return }
             self?.ble.buzzStrengthRestOnce()
         }
+        strengthWorkouts.liveReading = { [weak self] in
+            guard let self, let bpm = self.live.currentHeartRate() else { return (nil, nil) }
+            return (bpm, self.profile.hrZoneSet.zoneNumber(forBPM: Double(bpm)))
+        }
+        live.onHeartRateReceived = { [weak self] in self?.strengthWorkouts.runtimeTick() }
         strengthWorkouts.loadMetrics = { [weak self] session in
             guard let self else { return StrengthWorkoutMetrics() }
             let now = Date()
@@ -240,7 +245,7 @@ final class AppModel: ObservableObject {
                 maxHR: Double(self.profile.hrMax),
                 restingHR: self.repo.today?.restingHr.map(Double.init) ?? StrainScorer.defaultRestingHR,
                 sex: self.profile.sex, method: PuffinExperiment.effortMethod,
-                truncated: samples.count >= 100_000)
+                truncated: samples.count >= 100_000, zones: self.profile.hrZoneSet)
         }
         // One app-owned stream request lasts for the durable strength session, across navigation.
         strengthWorkouts.$state.map { $0.active != nil }.removeDuplicates().sink { [weak self] wanted in

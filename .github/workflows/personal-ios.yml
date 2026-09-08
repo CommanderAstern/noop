@@ -115,12 +115,14 @@ jobs:
           Add this source in SideStore:
           https://github.com/CommanderAstern/noop/releases/latest/download/altstore-source.json
 
-          Strength tracker: exercises and gym machines, custom entries, sets/reps/kg/lb, routines,
-          durable sessions and history, configurable rest countdowns, optional WHOOP wrist cues
-          and phone notifications. No proprietary muscular-strain calculation.
+          Strength tracker: training-day templates, warm-up and working sets, kg/lb,
+          set timing and actual rest history, hidden undo, lift progress and PR achievements.
+          Post-workout heart-rate graphs highlight recorded exercise intervals. Includes
+          a minimized-session bar and rest Live Activities for Dynamic Island / Lock Screen.
+          Rest duration controls live in Exercises. No proprietary muscular-strain calculation.
 
-          Wrist cues use one supported haptic command and require real-strap testing. iOS background
-          rests use the optional phone notification; missed wrist cues are never replayed.
+          Wrist cues use one supported haptic command and require real-strap testing. Screen-off
+          cues remain best effort; enable phone notifications as fallback. Missed cues never replay.
           See docs/STRENGTH_TRACKER.md in the repository for installation and acceptance checks.
 
           Includes protocol, analytics, strength persistence/timer and workout integration checks,

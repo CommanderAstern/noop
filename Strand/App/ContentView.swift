@@ -4,12 +4,14 @@ import StrandDesign
 /// Root — the sidebar shell, with the first-run onboarding/pairing wizard overlaid until complete,
 /// and a "What's New" changelog sheet shown automatically after an update.
 struct ContentView: View {
+    @EnvironmentObject private var model: AppModel
     @AppStorage("noop.onboarded") private var onboarded = false
     @AppStorage("noop.lastSeenChangelogVersion") private var lastSeenChangelog = ""
     @AppStorage("noop.acceptedTermsVersion") private var acceptedTerms = ""
     /// Local timestamp of the last terms acceptance — the on-device consent record (version + when).
     @AppStorage("noop.acceptedTermsAt") private var acceptedTermsAt = ""
     @State private var showWhatsNew = false
+    @State private var automaticLaunchSheetResolved = false
 
     var body: some View {
         ZStack {
@@ -28,6 +30,7 @@ struct ContentView: View {
             // the current terms version is accepted; re-appears if the terms materially change.
             if acceptedTerms != Terms.currentVersion {
                 TermsGateView(onAccept: {
+                    automaticLaunchSheetResolved = false
                     acceptedTermsAt = ISO8601DateFormatter().string(from: Date())
                     acceptedTerms = Terms.currentVersion
                 })
@@ -39,7 +42,9 @@ struct ContentView: View {
         // the full-screen onboarding / terms overlays — decelerating, nothing overshoots.
         .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.42), value: onboarded)
         .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.42), value: acceptedTerms)
-        .sheet(isPresented: $showWhatsNew) {
+        .modifier(StrengthPresentation(tracker: model.strengthWorkouts,
+            enabled: onboarded && acceptedTerms == Terms.currentVersion && automaticLaunchSheetResolved))
+        .sheet(isPresented: $showWhatsNew, onDismiss: { automaticLaunchSheetResolved = true }) {
             WhatsNewView(onClose: {
                 lastSeenChangelog = AppChangelog.currentVersion
                 showWhatsNew = false
@@ -70,7 +75,10 @@ struct ContentView: View {
         // Existing users who updated: their last-seen version is behind the current one.
         if onboarded && acceptedTerms == Terms.currentVersion
             && lastSeenChangelog != AppChangelog.currentVersion {
+            automaticLaunchSheetResolved = false
             showWhatsNew = true
+        } else {
+            automaticLaunchSheetResolved = true
         }
     }
 }

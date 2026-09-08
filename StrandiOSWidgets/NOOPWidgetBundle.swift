@@ -9,6 +9,7 @@ struct NOOPWidgetBundle: WidgetBundle {
     var body: some Widget {
         NOOPWidget()
         NOOPLiveActivity()
+        StrengthLiveActivity()
         CoachBriefWidget()
         HeartRateWidget()
     }
