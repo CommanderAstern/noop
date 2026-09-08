@@ -1,11 +1,19 @@
 #if os(iOS)
 import Foundation
 import ActivityKit
+import StrengthTracking
 
 /// Starts, updates, and ends the live-HR Live Activity. The activity appears on the Lock Screen and
 /// in the Dynamic Island while the strap is bonded and streaming heart rate.
 @MainActor
 final class LiveActivityController {
+    private var strengthActive = false
+    private let strengthActivity = StrengthLiveActivityController()
+    func updateStrength(_ state: StrengthState) {
+        strengthActive = state.active != nil
+        if strengthActive, activity != nil { Task { await end() } }
+        strengthActivity.update(state)
+    }
     private var activity: Activity<NOOPActivityAttributes>?
     private var lastPush: Date = .distantPast
     /// Cached `ActivityAuthorizationInfo` — `update` runs at ~1 Hz off the live HR stream, and
@@ -27,6 +35,7 @@ final class LiveActivityController {
     /// live link, not the sticky "paired" flag) and a heart rate is present; ends the moment the link
     /// drops. Throttled to ~once every 2 s so we stay well under the Live Activity update budget.
     func update(bpm: Int?, recovery: Int?, connected: Bool, effort: Int? = nil) {
+        guard !strengthActive else { strengthActivity.refreshAuthorization(); return }
         guard authInfo.areActivitiesEnabled else { return }
 
         // Re-adopt an activity that outlived a previous app session. ActivityKit keeps Live Activities

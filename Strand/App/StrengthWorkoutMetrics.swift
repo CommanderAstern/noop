@@ -16,6 +16,8 @@ struct StrengthWorkoutMetrics {
     var peak: Int?
     var cardioEffort: Double?
     var truncated = false
+    var coveredSeconds = 0
+    var zoneSeconds = Array(repeating: 0, count: 6)
 
     /// Keep chart work bounded for long sessions. Scoring and averages still use all accepted HR.
     /// Preserve bucket endpoints and extremes; segment IDs prevent bridging recording gaps.
@@ -65,8 +67,10 @@ struct StrengthWorkoutMetrics {
                 guard (1...60).contains(seconds) else { continue }
                 weightedBPM += Double(sample.bpm * seconds)
                 coveredSeconds += seconds
+                result.zoneSeconds[HRZones.zones(maxHR: maxHR).zoneNumber(forBPM: Double(sample.bpm))] += seconds
             }
             if coveredSeconds > 0 {
+                result.coveredSeconds = coveredSeconds
                 result.average = Int((weightedBPM / Double(coveredSeconds)).rounded())
             }
         }

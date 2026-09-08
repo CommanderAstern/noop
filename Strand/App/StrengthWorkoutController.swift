@@ -16,6 +16,8 @@ final class StrengthWorkoutController: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var notificationStatus = "Phone alerts are off."
     @Published private(set) var restStatus: String?
+    @Published var presented = false
+    var liveReading: () -> (bpm: Int?, zone: Int?) = { (nil, nil) }
     private let storage: StrengthFileStore
     private var readable = true
     private var lastRuntimeTick: ContinuousClock.Instant?
@@ -81,6 +83,7 @@ final class StrengthWorkoutController: ObservableObject {
         var next = state
         edit(&next)
         guard next != state else { return true }
+        next.version = 2
         do { try storage.save(next) }
         catch {
             self.error = "Could not save strength data. Your last saved session is intact. Free device storage and try again."

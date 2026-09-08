@@ -19,7 +19,7 @@ xcrun simctl bootstatus "$DEVICE" -b
 xcrun simctl status_bar "$DEVICE" override --time '9:41' --batteryState charged --batteryLevel 100
 APP=$(find build/strength-simulator/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -type d | head -1)
 xcrun simctl install "$DEVICE" "$APP"
-for screen in home active picker history; do
+for screen in home active rest exercises picker history summary progress; do
   xcrun simctl terminate "$DEVICE" com.commanderastern.noop || true
   xcrun simctl launch "$DEVICE" com.commanderastern.noop --demo-screen "strength-$screen" -theme.appearance dark
   sleep 8

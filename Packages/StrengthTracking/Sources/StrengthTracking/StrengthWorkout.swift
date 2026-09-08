@@ -10,6 +10,8 @@ public struct StrengthExercise: Codable, Equatable, Identifiable {
     public var id: UUID
     public var name: String
     public var equipment: String
+    /// Optional user-owned thumbnail, stored with the encrypted workout document.
+    public var photo: Data?
     public init(id: UUID = UUID(), name: String, equipment: String) {
         self.id = id; self.name = name; self.equipment = equipment
     }
@@ -38,9 +40,12 @@ public struct StrengthSet: Codable, Equatable, Identifiable {
     /// Canonical storage avoids rounding drift when switching display units.
     public var kilograms: Double = 0
     public var completedAt: Date?
+    public var startedAt: Date?
+    public var setKind: StrengthSetKind?
+    public var kind: StrengthSetKind { get { setKind ?? .working } set { setKind = newValue } }
     public init(reps: Int = 8, kilograms: Double = 0) { self.reps = reps; self.kilograms = kilograms }
     public var isValid: Bool { (1...999).contains(reps) && kilograms.isFinite && (0...10_000).contains(kilograms) }
-    public func fresh() -> Self { Self(reps: reps, kilograms: kilograms) }
+    public func fresh() -> Self { var set = Self(reps: reps, kilograms: kilograms); set.setKind = setKind; return set }
 }
 
 public struct StrengthMovement: Codable, Equatable, Identifiable {
@@ -48,10 +53,11 @@ public struct StrengthMovement: Codable, Equatable, Identifiable {
     /// Snapshot the exercise so later catalog edits cannot relabel history.
     public var exercise: StrengthExercise
     public var sets: [StrengthSet]
+    public var restSeconds: Int?
     public init(exercise: StrengthExercise, sets: [StrengthSet] = [StrengthSet()]) {
         self.exercise = exercise; self.sets = sets
     }
-    public func fresh() -> Self { Self(exercise: exercise, sets: sets.map { $0.fresh() }) }
+    public func fresh() -> Self { var movement = Self(exercise: exercise, sets: sets.map { $0.fresh() }); movement.restSeconds = restSeconds; return movement }
 }
 
 public struct StrengthRoutine: Codable, Equatable, Identifiable {
@@ -71,6 +77,8 @@ public struct StrengthSession: Codable, Equatable, Identifiable {
     public var name: String = "Strength workout"
     public var startedAt: Date
     public var finishedAt: Date?
+    public var restIntervals: [StrengthRestInterval]?
+    public var notes: String?
     public var restSeconds: Int = 90
     public var movements: [StrengthMovement] = []
     public var unit: LiftingUnit = .kg
@@ -92,7 +100,7 @@ public struct StrengthRest: Codable, Equatable, Identifiable {
 }
 
 public struct StrengthState: Codable, Equatable {
-    public var version: Int = 1
+    public var version: Int = 2
     public var active: StrengthSession?
     public var history: [StrengthSession] = []
     public var routines: [StrengthRoutine] = []
@@ -121,11 +129,17 @@ public struct StrengthState: Codable, Equatable {
               let m = session.movements.firstIndex(where: { $0.id == movementID }),
               let s = session.movements[m].sets.firstIndex(where: { $0.id == setID }),
               session.movements[m].sets[s].completedAt == nil,
+              !session.movements.flatMap(\.sets).contains(where: { $0.id != setID && $0.startedAt != nil && $0.completedAt == nil }),
               session.movements[m].sets[s].isValid else { return }
-        session.movements[m].sets[s].completedAt = now
+        let finished = max(now, session.movements[m].sets[s].startedAt ?? session.startedAt)
+        session.closeRest(at: finished, nextSetID: setID, reason: .unknownStart)
+        session.movements[m].sets[s].completedAt = finished
+        let seconds = session.movements[m].restSeconds ?? restSeconds
+        if session.restIntervals == nil { session.restIntervals = [] }
+        session.restIntervals?.append(StrengthRestInterval(setID: setID, startedAt: finished, plannedSeconds: seconds))
         active = session
-        rest = restSeconds > 0 ? StrengthRest(sessionID: session.id, setID: setID,
-                                              deadline: now.addingTimeInterval(Double(restSeconds))) : nil
+        rest = seconds > 0 ? StrengthRest(sessionID: session.id, setID: setID,
+                                              deadline: finished.addingTimeInterval(Double(seconds))) : nil
     }
 
     /// Commit the visible input and its completion as one transaction (including save recovery).
@@ -142,8 +156,16 @@ public struct StrengthState: Codable, Equatable {
 
     public mutating func undoSet(movementID: UUID, setID: UUID) {
         guard let m = active?.movements.firstIndex(where: { $0.id == movementID }),
-              let s = active?.movements[m].sets.firstIndex(where: { $0.id == setID }) else { return }
+              let s = active?.movements[m].sets.firstIndex(where: { $0.id == setID }),
+              active?.movements[m].sets[s].completedAt != nil else { return }
         active?.movements[m].sets[s].completedAt = nil
+        active?.movements[m].sets[s].startedAt = nil
+        active?.restIntervals?.removeAll { $0.setID == setID }
+        if let count = active?.restIntervals?.count {
+            for index in 0..<count where active?.restIntervals?[index].nextSetID == setID {
+                active?.restIntervals?[index].reason = .correction
+            }
+        }
         if rest?.setID == setID { rest = nil }
     }
 
@@ -159,7 +181,8 @@ public struct StrengthState: Codable, Equatable {
 
     public mutating func finish(now: Date) {
         guard var session = active, session.completedSets > 0 else { return }
-        session.finishedAt = max(now, session.startedAt)
+        session.finishedAt = max(now, session.startedAt, session.movements.flatMap(\.sets).compactMap(\.completedAt).max() ?? session.startedAt)
+        session.closeRest(at: session.finishedAt!, nextSetID: nil, reason: .finished)
         history.insert(session, at: 0)
         active = nil; rest = nil
     }
@@ -167,11 +190,14 @@ public struct StrengthState: Codable, Equatable {
     public mutating func discard() { active = nil; rest = nil }
 
     public func validated() throws -> Self {
-        guard version == 1 else { throw StrengthStorageError.unsupportedVersion }
+        guard (1...2).contains(version) else { throw StrengthStorageError.unsupportedVersion }
         func unique<T: Hashable>(_ ids: [T]) -> Bool { Set(ids).count == ids.count }
         func movementsValid(_ movements: [StrengthMovement]) -> Bool {
             unique(movements.map(\.id)) && unique(movements.flatMap { $0.sets.map(\.id) }) && movements.allSatisfy {
-                !$0.exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.sets.allSatisfy(\.isValid)
+                !$0.exercise.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    && ($0.exercise.photo?.count ?? 0) <= 1_000_000
+                    && ($0.restSeconds.map { (0...1800).contains($0) } ?? true)
+                    && $0.sets.allSatisfy { set in set.isValid && (set.startedAt == nil || set.completedAt == nil || set.startedAt! <= set.completedAt!) }
             }
         }
         guard (0...1800).contains(restSeconds), unique(history.map(\.id)), unique(routines.map(\.id)),
@@ -180,6 +206,16 @@ public struct StrengthState: Codable, Equatable {
               routines.allSatisfy({ (0...1800).contains($0.restSeconds) && movementsValid($0.movements) }),
               active.map({ $0.finishedAt == nil && movementsValid($0.movements) }) ?? true else {
             throw StrengthStorageError.invalidData
+        }
+        for session in history + [active].compactMap({ $0 }) {
+            let intervals = session.restIntervals ?? []
+            guard unique(intervals.map(\.id)), intervals.filter({ $0.endedAt == nil }).count <= 1,
+                  session.finishedAt == nil || intervals.allSatisfy({ $0.endedAt != nil }),
+                  intervals.allSatisfy({ interval in
+                      (0...1800).contains(interval.plannedSeconds)
+                      && (interval.endedAt.map { $0 >= interval.startedAt } ?? true)
+                      && session.movements.flatMap(\.sets).contains { $0.id == interval.setID && $0.completedAt != nil }
+                  }) else { throw StrengthStorageError.invalidData }
         }
         if let rest {
             guard active?.id == rest.sessionID,
@@ -207,6 +243,18 @@ public struct StrengthFileStore {
     public func save(_ state: StrengthState) throws {
         let data = try JSONEncoder().encode(state.validated())
         try prepareDirectory()
+        // Retain the readable v1 document once before v2's first write. Never auto-restore a backup.
+        if state.version == 2, let previous = try? Data(contentsOf: url),
+           let old = try? JSONDecoder().decode(StrengthState.self, from: previous), old.version == 1 {
+            let backup = url.deletingLastPathComponent().appendingPathComponent("before-v2.json")
+            if !FileManager.default.fileExists(atPath: backup.path) {
+                #if os(iOS)
+                try previous.write(to: backup, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                #else
+                try previous.write(to: backup, options: .atomic)
+                #endif
+            }
+        }
         #if os(iOS)
         try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         #else

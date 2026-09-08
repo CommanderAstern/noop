@@ -85,6 +85,7 @@ final class AppModel: ObservableObject {
     /// "manual"), which then shows in the Workouts view. The day's strain already counts this HR (it's
     /// the same live stream the store persists), so this is a per-session annotation, not a double-count.
     let strengthWorkouts = StrengthWorkoutController()
+    private var lastStrengthReadingAt: Date?
 
     @Published var activeWorkout: ActiveWorkout?
     /// The just-ended workout, for a brief inline confirmation on Live (cleared on the next start).
@@ -229,6 +230,11 @@ final class AppModel: ObservableObject {
         strengthWorkouts.buzz = { [weak self] in
             guard UserDefaults.standard.bool(forKey: Self.wristAlertsMasterKey) else { return }
             self?.ble.buzzStrengthRestOnce()
+        }
+        strengthWorkouts.liveReading = { [weak self] in
+            guard let self, self.live.connected, let bpm = self.live.heartRate,
+                  let date = self.lastStrengthReadingAt, Date().timeIntervalSince(date) < 10 else { return (nil, nil) }
+            return (bpm, HRZones.zones(maxHR: Double(self.profile.hrMax)).zoneNumber(forBPM: Double(bpm)))
         }
         strengthWorkouts.loadMetrics = { [weak self] session in
             guard let self else { return StrengthWorkoutMetrics() }
@@ -713,6 +719,7 @@ final class AppModel: ObservableObject {
         strengthWorkouts.runtimeTick()
         var inst: Double?
         if let hr = live.heartRate, hr >= 30, hr <= 220 {
+            lastStrengthReadingAt = Date()
             inst = Double(hr)
         } else if let rr = live.rr.last, rr > 0 {
             let v = 60_000.0 / Double(rr)

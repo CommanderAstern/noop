@@ -152,6 +152,7 @@ struct StrandiOSApp: App {
     var body: some Scene {
         WindowGroup {
             iOSRootView()
+                .modifier(StrengthPresentation(tracker: model.strengthWorkouts))
                 .environmentObject(model)
                 .environmentObject(model.ble)   // #334: Today pull-to-sync reads BLEManager (no HR churn)
                 .environmentObject(model.live)
@@ -191,6 +192,7 @@ struct StrandiOSApp: App {
                         effort: day?.strain.map { Int($0.rounded()) }
                     )
                 }
+                .onReceive(model.strengthWorkouts.$state) { state in liveActivity.updateStrength(state) }
                 // End the Live Activity the moment the link drops, even if no further HR tick arrives.
                 .onReceive(model.live.$connected) { isConnected in
                     // #911: same shared anchor as the heartRate site above, so the Live Activity, the
@@ -265,6 +267,12 @@ struct StrandiOSApp: App {
                 // HealthKit-free payload. Filter on the host so other future schemes don't trip the
                 // importer; macOS never registers the scheme so this stays iOS-only.
                 .onOpenURL { url in
+                    if url.scheme == "noop", url.host == "strength" {
+                        let session = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "session" })?.value
+                        if session == nil || session == model.strengthWorkouts.state.active?.id.uuidString {
+                            model.strengthWorkouts.presented = true
+                        }
+                    }
                     if url.host == "import-health" {
                         model.handleHealthImportURL(url)
                     }
@@ -497,6 +505,10 @@ enum DemoScreens {
         case "strength-active": return AnyView(StrengthDemoView(mode: "active"))
         case "strength-picker": return AnyView(StrengthDemoView(mode: "picker"))
         case "strength-history": return AnyView(StrengthDemoView(mode: "history"))
+        case "strength-summary": return AnyView(StrengthDemoView(mode: "summary"))
+        case "strength-progress": return AnyView(StrengthDemoView(mode: "progress"))
+        case "strength-exercises": return AnyView(StrengthDemoView(mode: "exercises"))
+        case "strength-rest": return AnyView(StrengthDemoView(mode: "rest"))
         case "health":   return AnyView(HealthView())
         case "insights": return AnyView(InsightsView())
         case "explore":  return AnyView(MetricExplorerView())

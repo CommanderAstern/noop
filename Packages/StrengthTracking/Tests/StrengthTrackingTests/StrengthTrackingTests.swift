@@ -194,7 +194,7 @@ final class StrengthTrackingTests: XCTestCase {
         XCTAssertThrowsError(try disk.load())
         XCTAssertEqual(try Data(contentsOf: disk.url), garbage)
         var future = workout()
-        future.version = 2
+        future.version = 999
         try JSONEncoder().encode(future).write(to: disk.url)
         XCTAssertThrowsError(try disk.load())
     }
