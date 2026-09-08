@@ -49,6 +49,7 @@ jobs:
           xcodebuild -scheme Strand -configuration Debug -destination 'platform=macOS' \
             -derivedDataPath build/strength-tests CODE_SIGNING_ALLOWED=NO \
             -only-testing:StrandTests/StrengthWorkoutControllerTests \
+            -only-testing:StrandTests/StrengthWorkoutMetricsTests \
             -only-testing:StrandTests/ActiveWorkoutPersistenceTests \
             -only-testing:StrandTests/ActiveWorkoutClockTests \
             test > "$RUNNER_TEMP/noop-strength-tests.log" 2>&1 || {

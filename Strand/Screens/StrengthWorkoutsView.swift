@@ -1,6 +1,8 @@
 import SwiftUI
 import StrandDesign
 import StrengthTracking
+import StrandAnalytics
+import WhoopProtocol
 
 struct StrengthWorkoutEntryView: View {
     @ObservedObject var tracker: StrengthWorkoutController
@@ -60,6 +62,7 @@ struct StrengthWorkoutsView: View {
                     NoopButton("Add exercise or machine", systemImage: "plus", kind: .secondary, fullWidth: true) {
                         showExercises = true
                     }
+                    NoopCard { StrengthMetricsView(session: session, tracker: tracker) }
                     NoopButton("Save as routine", systemImage: "bookmark", kind: .secondary, fullWidth: true) {
                         routineName = session.name; showRoutineName = true
                     }.disabled(session.movements.isEmpty)
@@ -404,6 +407,7 @@ private struct StrengthHistoryView: View {
                     }
                 }.disabled(saved)
             }
+            Section { StrengthMetricsView(session: session, tracker: tracker) }
             ForEach(session.movements) { movement in
                 Section("\(movement.exercise.name) · \(movement.exercise.equipment)") {
                     ForEach(Array(movement.sets.enumerated()), id: \.element.id) { index, set in
@@ -442,7 +446,16 @@ struct StrengthDemoView: View {
         state.routines = [StrengthRoutine(name: "Upper body A", movements: state.active!.movements, restSeconds: 90, unit: .kg)]
         if mode == "home" || mode == "history" { state.finish(now: now) }
         try? store.save(state)
-        _tracker = StateObject(wrappedValue: StrengthWorkoutController(storage: store, platformServices: false))
+        let demoTracker = StrengthWorkoutController(storage: store, platformServices: false)
+        demoTracker.loadMetrics = { session in
+            let samples = (0...720).map { second in
+                HRSample(ts: Int(session.startedAt.timeIntervalSince1970) + second,
+                         bpm: 115 + Int(25 * sin(Double(second) / 35)))
+            }
+            return .calculate(session: session, samples: samples, now: now,
+                              maxHR: 190, restingHR: 60, sex: "male", method: .edwards)
+        }
+        _tracker = StateObject(wrappedValue: demoTracker)
     }
 
     var body: some View {

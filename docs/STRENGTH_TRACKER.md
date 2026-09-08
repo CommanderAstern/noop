@@ -97,3 +97,26 @@ Do not delete the app to update it. Keep the working version available for rollb
 Simulator screenshots use clearly synthetic demo workouts through the existing
 DEBUG-only demo-screen harness; they show the actual SwiftUI screens. No demo data
 or screenshot route is available in the published Release build.
+
+## Heart rate and workout load
+
+Active workouts and history show completed sets, reps, and external volume load
+(completed reps times logged weight), plus an HR graph and average/peak HR. Volume
+load is not muscular strain; it excludes unlogged body mass and machine mechanics.
+The cardio estimate reuses NOOP's existing independent HR-reserve/TRIMP scorer on
+its 0–100 scale, with current profile settings and resting-HR fallback. It is not
+WHOOP Strain, and no muscular/cardio percentage split is inferred.
+
+The graph reads the existing local HR database within the workout's saved start/end
+times. It breaks lines across gaps longer than one minute; a short or insufficient
+recording has no cardio score. Sync can later fill missing HR. Deleting the HR
+database removes the graph, while the separately stored lifting log remains.
+Live summaries refresh every 15 seconds while visible. The durable active session
+owns one realtime-HR request, released on finish/discard; iOS suspension still limits
+live capture. Metrics never create another HR workout or add a second day-strain entry.
+
+Check graph/average/peak after a recorded session, revisit after restarting, and test
+a disconnected interval: the graph must show a gap, not a continuous invented trace.
+Change kg/lb and undo a set: volume must convert or decrease to match completed sets.
+See [muscular-load research](MUSCULAR_LOAD_RESEARCH.md) for the data needed to develop
+and validate an independent muscular-load estimate.

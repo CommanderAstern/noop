@@ -230,6 +230,24 @@ final class AppModel: ObservableObject {
             guard UserDefaults.standard.bool(forKey: Self.wristAlertsMasterKey) else { return }
             self?.ble.buzzStrengthRestOnce()
         }
+        strengthWorkouts.loadMetrics = { [weak self] session in
+            guard let self else { return StrengthWorkoutMetrics() }
+            let now = Date()
+            let samples = await self.repo.hrSamples(
+                from: Int(ceil(session.startedAt.timeIntervalSince1970)),
+                to: Int((session.finishedAt ?? now).timeIntervalSince1970), limit: 100_000)
+            return StrengthWorkoutMetrics.calculate(session: session, samples: samples, now: now,
+                maxHR: Double(self.profile.hrMax),
+                restingHR: self.repo.today?.restingHr.map(Double.init) ?? StrainScorer.defaultRestingHR,
+                sex: self.profile.sex, method: PuffinExperiment.effortMethod,
+                truncated: samples.count >= 100_000)
+        }
+        // One app-owned stream request lasts for the durable strength session, across navigation.
+        strengthWorkouts.$state.map { $0.active != nil }.removeDuplicates().sink { [weak self] wanted in
+            guard let self, wanted != self.strengthOwnsRealtimeHR else { return }
+            self.strengthOwnsRealtimeHR = wanted
+            if wanted { self.startRealtimeHR() } else { self.stopRealtimeHR() }
+        }.store(in: &hrCancellables)
         // Route the engine's per-day scoring diagnostic into the SAME shareable strap log every other
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
         // was computed per day. `live` is captured strongly (created just above) , the engine outlives the
@@ -1220,6 +1238,7 @@ final class AppModel: ObservableObject {
     /// no live HR, so every sample was dropped and the session was silently discarded). Ref-counted to
     /// match Android's `realtimeWanters` (AppViewModel.requestRealtimeHr/releaseRealtimeHr).
     private var realtimeWanters = 0
+    private var strengthOwnsRealtimeHR = false
 
     /// A surface that shows live HR appeared. Arms the realtime stream on the 0→1 edge , and ONLY on
     /// that edge blanks the stale smoothing window (#46) so a resume shows "," until a fresh sample

@@ -36,6 +36,7 @@ final class StrengthWorkoutController: ObservableObject {
         })
     var strapReady: () -> Bool = { false }
     var buzz: () -> Void = {}
+    var loadMetrics: (StrengthSession) async -> StrengthWorkoutMetrics = { _ in StrengthWorkoutMetrics() }
 
     init(storage suppliedStorage: StrengthFileStore? = nil, platformServices: Bool = true) {
         self.platformServices = platformServices
