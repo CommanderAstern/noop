@@ -20,9 +20,24 @@ xcrun simctl bootstatus "$DEVICE" -b
 xcrun simctl status_bar "$DEVICE" override --time '9:41' --batteryState charged --batteryLevel 100
 APP=$(find build/strength-simulator/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -type d | head -1)
 xcrun simctl install "$DEVICE" "$APP"
+xcrun swiftc Tools/personal/check-strength-capture.swift -o "$RUNNER_TEMP/check-strength-capture"
 for screen in home warmup active rest exercises picker history summary summary-detail achievements progress; do
   xcrun simctl terminate "$DEVICE" com.commanderastern.noop || true
-  xcrun simctl launch "$DEVICE" com.commanderastern.noop --demo-screen "strength-$screen" -theme.appearance dark
-  sleep 8
-  xcrun simctl io "$DEVICE" screenshot "build/strength-screenshots/$screen.png"
+  xcrun simctl launch --stdout="$RUNNER_TEMP/strength-$screen.stdout" --stderr="$RUNNER_TEMP/strength-$screen.stderr" \
+    "$DEVICE" com.commanderastern.noop --demo-screen "strength-$screen" -theme.appearance dark
+  rendered=false
+  for attempt in 1 2 3 4 5 6; do
+    sleep 8
+    xcrun simctl io "$DEVICE" screenshot "build/strength-screenshots/$screen.png"
+    if "$RUNNER_TEMP/check-strength-capture" "build/strength-screenshots/$screen.png"; then
+      rendered=true
+      break
+    fi
+  done
+  if [ "$rendered" != true ]; then
+    cat "$RUNNER_TEMP/strength-$screen.stdout" "$RUNNER_TEMP/strength-$screen.stderr" || true
+    xcrun simctl spawn "$DEVICE" log show --last 1m --predicate 'process == "NOOP" OR process == "Strand"' || true
+    echo "The $screen screen did not render within 48 seconds."
+    exit 1
+  fi
 done

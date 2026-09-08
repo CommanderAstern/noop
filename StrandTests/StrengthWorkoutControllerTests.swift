@@ -6,6 +6,55 @@ import StrengthTracking
 @MainActor
 final class StrengthWorkoutControllerTests: XCTestCase {
     private let runtimeEpoch = ContinuousClock.now
+    func testPresentationWaitsForGatesAndDoesNotChangePersistedWorkout() throws {
+        let (disk, _) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let before = tracker.state
+        let bytes = try Data(contentsOf: disk.url)
+        var cues = 0; tracker.buzz = { cues += 1 }
+        tracker.requestPresentation(sessionID: before.active!.id)
+        let request = tracker.pendingPresentation
+        for _ in 0..<3 { tracker.presentPendingRequest(allowed: false) }
+        XCTAssertFalse(tracker.presented)
+        XCTAssertEqual(tracker.pendingPresentation, request)
+        XCTAssertNil(tracker.deliveredPresentation)
+        tracker.presentPendingRequest(allowed: true)
+        XCTAssertTrue(tracker.presented)
+        XCTAssertNil(tracker.pendingPresentation)
+        XCTAssertEqual(tracker.deliveredPresentation, request)
+        tracker.presentPendingRequest(allowed: true)
+        XCTAssertEqual(tracker.deliveredPresentation, request)
+        XCTAssertEqual(tracker.state, before)
+        XCTAssertEqual(try Data(contentsOf: disk.url), bytes)
+        XCTAssertEqual(cues, 0)
+    }
+
+    func testDeferredSessionLinkCannotOpenReplacedSessionAndRepeatedLinkRefocuses() throws {
+        let (disk, _) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        tracker.requestPresentation(sessionID: tracker.state.active!.id)
+        XCTAssertTrue(tracker.change { $0.active = nil; $0.rest = nil; $0.start(now: Date()) })
+        tracker.presentPendingRequest(allowed: true)
+        XCTAssertFalse(tracker.presented)
+        XCTAssertNil(tracker.pendingPresentation)
+        XCTAssertNil(tracker.deliveredPresentation)
+        let id = tracker.state.active!.id
+        tracker.requestPresentation(sessionID: id)
+        tracker.presentPendingRequest(allowed: true)
+        let first = tracker.deliveredPresentation
+        tracker.requestPresentation(sessionID: id)
+        tracker.presentPendingRequest(allowed: true)
+        XCTAssertNotEqual(first?.id, tracker.deliveredPresentation?.id)
+        XCTAssertEqual(tracker.deliveredPresentation?.sessionID, id)
+        tracker.presented = false
+        XCTAssertTrue(tracker.change { $0.active = nil; $0.rest = nil })
+        tracker.requestPresentation(sessionID: id)
+        XCTAssertNil(tracker.pendingPresentation)
+        tracker.requestPresentation()
+        tracker.presentPendingRequest(allowed: true)
+        XCTAssertTrue(tracker.presented)
+        XCTAssertNil(tracker.deliveredPresentation?.sessionID)
+    }
     func testExpiredLegacyRestIsRestoredAndConsumedSilentlyOnLaunch() throws {
         let (disk, original) = try fixture()
         var legacy = original; legacy.version = 1

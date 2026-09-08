@@ -19,6 +19,7 @@ struct RootTabView: View {
     /// External entry points must wait until the mandatory first-run gates have completed. The root owns
     /// that state; keeping it explicit here prevents this shell's window-level sheet from covering a gate.
     let homeScreenQuickActionsEnabled: Bool
+    @ObservedObject var strength: StrengthWorkoutController
 
     @EnvironmentObject private var repo: Repository
     /// Cross-screen navigation requests (e.g. Live → "Manage devices"). Devices isn't a tab — it lives
@@ -166,19 +167,25 @@ struct RootTabView: View {
         // Quick-action sheet presents with the calm easing (~0.42s) per the README sheet spec —
         // the easing is applied where `quickAction` is set (see `presentQuickAction`), keeping the
         // animation scoped to the sheet rather than the whole shell.
-        .sheet(item: $quickAction) { action in
+        .sheet(item: $quickAction, onDismiss: ordinarySheetDismissed) { action in
             quickActionDestination(action)
         }
         // Live's "Manage devices" affordance (and any future cross-screen link to Devices) routes here:
         // present the Devices manager in its own nav stack, the same way the quick-action screens do.
-        .sheet(isPresented: $showDevices) {
+        .sheet(isPresented: $showDevices, onDismiss: ordinarySheetDismissed) {
             devicesScreen
         }
         // v5 pillar deep-links (Insights hub / Lab Book / fused record / Rhythm) present as a sheet in
         // their own nav stack — the same idiom the quick-action + Devices screens use on iPhone.
-        .sheet(item: $routedPillar) { dest in
+        .sheet(item: $routedPillar, onDismiss: ordinarySheetDismissed) { dest in
             pillarScreen(dest)
         }
+        .modifier(StrengthPresentation(tracker: strength, enabled: homeScreenQuickActionsEnabled,
+            handlesRequests: false, onDismiss: presentPendingHomeScreenQuickActionIfPossible))
+        .background(StrengthSheetHandoff(tracker: strength, enabled: homeScreenQuickActionsEnabled) {
+            quickAction = nil; showDevices = false; routedPillar = nil
+            strength.presentPendingRequest(allowed: homeScreenQuickActionsEnabled)
+        })
         // Honour a router request: Devices keeps its dedicated sheet; the v5 pillars route through the
         // shared pillar sheet. Cleared so the same tap can fire again later.
         .onChange(of: router.requestedDestination) { _, dest in
@@ -247,6 +254,9 @@ struct RootTabView: View {
     /// Screen choice supersedes any ordinary shell sheet; choosing the already-open destination simply
     /// consumes the request and leaves that screen in place.
     private func presentPendingHomeScreenQuickActionIfPossible() {
+        guard homeScreenQuickActionsEnabled, strength.pendingPresentation == nil else { return }
+        // A Home Screen request stays pending until the workout sheet actually dismisses.
+        guard !strength.presented else { return }
         guard homeScreenQuickActionsEnabled,
               let action = homeScreenQuickActions.pendingAction else { return }
 
@@ -262,6 +272,10 @@ struct RootTabView: View {
             routedPillar = nil
             quickAction = destination
         }
+    }
+
+    private func ordinarySheetDismissed() {
+        presentPendingHomeScreenQuickActionIfPossible()
     }
 
     /// A routed v5 pillar screen wrapped in its own nav stack + Done button (mirrors `quickScreen`).

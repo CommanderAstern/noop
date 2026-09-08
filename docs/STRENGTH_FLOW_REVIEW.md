@@ -92,3 +92,31 @@ the automated model tests do not claim to simulate those system frameworks.
     (`StrandiOS/App/StrandiOSApp.swift:195`, local inspection). Reconcile a fresh HR
     reading on strength finish/discard, preference change and foreground entry, without
     waiting for a BPM value change. Pending cleanup IDs remain excluded from adoption.
+21. **P1 — Strength presentation bypasses mandatory launch gates**
+    (`StrandiOS/App/StrandiOSApp.swift:288`, GitHub Codex review of `b0bf63c`). Both
+    the resume bar and sheet now use the existing onboarding/terms/What's New
+    readiness gate. Links queue intent; delivery revalidates the active session.
+    Regression tests cover deferred delivery, replacement, repeat links and unchanged
+    persistence/cue state.
+22. **P2 — macOS resume bar disappears outside workout screens**
+    (`Strand/Screens/StrengthWorkoutsView.swift:19`, same review). The presenter now
+    belongs to the persistent ContentView shell and shares its launch gates.
+23. **P2 — Strength sheet conflicts with ordinary shell sheets**
+    (`StrandiOS/App/RootTabView.swift:169`, follow-up review). The iPhone shell
+    uses a scene-local UIKit handoff to wait for actual sheet dismissal before
+    delivering a strength request. Home Screen actions remain queued during strength.
+24. **P2 — Session links do not refocus an already-open workout browser**
+    (`Strand/Screens/StrengthWorkoutsView.swift:65`, follow-up review). Each valid
+    delivery has a fresh event identity; it dismisses workout child sheets and selects
+    the active session's Live view, including repeated links to the same session.
+25. **Capture validation — A successful screenshot command can capture a blank launch surface**
+    (`Tools/personal/screenshot-strength.sh:25`, native visual inspection). The harness
+    now polls the same process for rendered dark content and text, with a bounded
+    timeout and launch diagnostics. This validates readiness; it does not alter images.
+26. **P2 — Waiting for an unpresented sheet can block routing forever**
+    (`StrandiOS/App/RootTabView.swift:260`, follow-up review). Replaced the binding-only
+    dismissal wait with inspection of the scene's actual presented controller.
+27. **P2 — Today's child sheets are absent from the shell's sheet inventory**
+    (`Strand/Liquid/LiquidTodayView.swift:449`, same follow-up). The native handoff
+    covers presentations owned by descendants, including Settings, without relying
+    on an incomplete list of shell bindings.

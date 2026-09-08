@@ -160,7 +160,6 @@ struct StrandiOSApp: App {
     var body: some Scene {
         WindowGroup {
             iOSRootView()
-                .modifier(StrengthPresentation(tracker: model.strengthWorkouts))
                 .environmentObject(model)
                 .environmentObject(model.ble)   // #334: Today pull-to-sync reads BLEManager (no HR churn)
                 .environmentObject(model.live)
@@ -284,9 +283,9 @@ struct StrandiOSApp: App {
                 .onOpenURL { url in
                     if url.scheme == "noop", url.host == "strength" {
                         let session = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "session" })?.value
-                        if session == nil || session == model.strengthWorkouts.state.active?.id.uuidString {
-                            model.strengthWorkouts.presented = true
-                        }
+                        if let session, let id = UUID(uuidString: session) {
+                            model.strengthWorkouts.requestPresentation(sessionID: id)
+                        } else if session == nil { model.strengthWorkouts.requestPresentation() }
                     }
                     if url.host == "import-health" {
                         model.handleHealthImportURL(url)
@@ -386,6 +385,7 @@ struct StrandiOSApp: App {
 /// excluded `RootView()` sidebar for `RootTabView()`. The shared `OnboardingWizard`, `TermsGateView`,
 /// `WhatsNewView`, `AppChangelog`, and `Terms` symbols all compile into the iOS target unchanged.
 private struct iOSRootView: View {
+    @EnvironmentObject private var model: AppModel
     @AppStorage("noop.onboarded") private var onboarded = false
     @AppStorage("noop.lastSeenChangelogVersion") private var lastSeenChangelog = ""
     @AppStorage("noop.acceptedTermsVersion") private var acceptedTerms = ""
@@ -418,7 +418,7 @@ private struct iOSRootView: View {
         ZStack {
             RootTabView(homeScreenQuickActionsEnabled:
                 demoBypass || (onboarded && acceptedTerms == Terms.currentVersion
-                    && automaticLaunchSheetResolved))
+                    && automaticLaunchSheetResolved), strength: model.strengthWorkouts)
             if !onboarded && !demoBypass {
                 OnboardingWizard(onFinished: {
                     onboarded = true

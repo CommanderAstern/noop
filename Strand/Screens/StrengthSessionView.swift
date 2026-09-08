@@ -18,6 +18,12 @@ struct StrengthSessionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     struct SetSelection: Identifiable { let movement: StrengthMovement; let set: StrengthSet; var id: UUID { self.set.id } }
 
+    private func focusRequestedSession() {
+        guard let id = tracker.deliveredPresentation?.sessionID, id == tracker.state.active?.id else { return }
+        tab = "Live"; picker = false; settings = false; restMovement = nil; edit = nil
+        finishAlert = false; discardAlert = false; notesAlert = false
+    }
+
     var body: some View {
         if let session = tracker.state.active {
             VStack(spacing: 0) {
@@ -59,6 +65,8 @@ struct StrengthSessionView: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: tab)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: session.completedSets)
+            .onAppear { focusRequestedSession() }
+            .onChangeCompat(of: tracker.deliveredPresentation) { _ in focusRequestedSession() }
             .sheet(isPresented: $picker) { StrengthExercisePicker(tracker: tracker) }
             .sheet(isPresented: $settings) { StrengthSettingsView(tracker: tracker) }
             .sheet(item: $restMovement) { movement in restEditor(movement) }

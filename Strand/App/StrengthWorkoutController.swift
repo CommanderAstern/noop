@@ -17,6 +17,27 @@ final class StrengthWorkoutController: ObservableObject {
     @Published private(set) var notificationStatus = "Phone alerts are off."
     @Published private(set) var restStatus: String?
     @Published var presented = false
+    struct PresentationRequest: Equatable {
+        let id = UUID()
+        let sessionID: UUID?
+    }
+    @Published private(set) var pendingPresentation: PresentationRequest?
+    @Published private(set) var deliveredPresentation: PresentationRequest?
+
+    /// Queue intent without changing a session or presenting above a launch gate/another sheet.
+    func requestPresentation(sessionID: UUID? = nil) {
+        guard sessionID == nil || sessionID == state.active?.id else { return }
+        pendingPresentation = PresentationRequest(sessionID: sessionID)
+    }
+
+    func presentPendingRequest(allowed: Bool) {
+        guard allowed, let request = pendingPresentation else { return }
+        pendingPresentation = nil
+        // A workout can finish or be replaced while onboarding or another sheet is open.
+        guard request.sessionID == nil || request.sessionID == state.active?.id else { return }
+        deliveredPresentation = request
+        presented = true
+    }
     var liveReading: () -> (bpm: Int?, zone: Int?) = { (nil, nil) }
     private let storage: StrengthFileStore
     private var readable = true

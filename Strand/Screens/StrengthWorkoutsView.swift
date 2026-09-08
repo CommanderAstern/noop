@@ -10,23 +10,23 @@ struct StrengthWorkoutEntryView: View {
                 Text("Strength training").font(StrandFont.title2)
                 Text(tracker.state.active.map { "\($0.name) · \($0.completedSets) sets logged" }
                      ?? "Your training days, lifts and progress.").foregroundStyle(StrandPalette.textSecondary)
-                Button(tracker.state.active == nil ? "Open workouts" : "Resume workout") { tracker.presented = true }
+                Button(tracker.state.active == nil ? "Open workouts" : "Resume workout") { tracker.requestPresentation(sessionID: tracker.state.active?.id) }
                     .buttonStyle(.borderedProminent)
             }
         }
-        #if os(macOS)
-        .modifier(StrengthPresentation(tracker: tracker))
-        #endif
     }
 }
 
 /// App-root presentation makes minimize/deep-link work from every tab, not just Workouts.
 struct StrengthPresentation: ViewModifier {
     @ObservedObject var tracker: StrengthWorkoutController
+    var enabled = true
+    var handlesRequests = true
+    var onDismiss: () -> Void = {}
     func body(content: Content) -> some View {
         content.safeAreaInset(edge: .bottom) {
-            if let session = tracker.state.active, !tracker.presented {
-                Button { tracker.presented = true } label: {
+            if enabled, let session = tracker.state.active, !tracker.presented {
+                Button { tracker.requestPresentation(sessionID: session.id) } label: {
                     HStack {
                         Image(systemName: "dumbbell.fill")
                         VStack(alignment: .leading) {
@@ -40,13 +40,19 @@ struct StrengthPresentation: ViewModifier {
                     }.padding(12).background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 14))
                 }.buttonStyle(.plain).padding(.horizontal).tint(StrandPalette.accent)
             }
-        }.sheet(isPresented: $tracker.presented) {
+        }.sheet(isPresented: Binding(get: { enabled && tracker.presented }, set: {
+            if enabled { tracker.presented = $0 }
+        }), onDismiss: onDismiss) {
             NavigationStack { StrengthWorkoutsView(tracker: tracker) }
                 #if os(macOS)
                 .frame(minWidth: 580, minHeight: 760)
                 #endif
         }
+        .onAppear { drain() }
+        .onChangeCompat(of: enabled) { _ in drain() }
+        .onChangeCompat(of: tracker.pendingPresentation) { _ in drain() }
     }
+    private func drain() { if handlesRequests { tracker.presentPendingRequest(allowed: enabled) } }
 }
 
 struct StrengthWorkoutsView: View {
@@ -85,6 +91,11 @@ struct StrengthWorkoutsView: View {
         .sheet(item: $editingRoutine) { routine in StrengthRoutineEditor(routine: routine, tracker: tracker) }
         .sheet(isPresented: $settings) { StrengthSettingsView(tracker: tracker) }
         .sheet(isPresented: $browse) { StrengthExercisePicker(tracker: tracker, libraryOnly: true) }
+        .onChangeCompat(of: tracker.deliveredPresentation) { request in
+            guard let id = request?.sessionID, id == tracker.state.active?.id else { return }
+            summary = nil; editingRoutine = nil; settings = false; browse = false
+            viewingSession = true
+        }
     }
 
     private var train: some View {
