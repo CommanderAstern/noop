@@ -13,8 +13,14 @@ struct StrengthSummaryView: View {
     @State private var selectedMovement: UUID?
     @State private var selectedMinute: Double?
     @State private var routine: StrengthRoutine?
+    private let initialScrollTarget: String?
+    init(session: StrengthSession, tracker: StrengthWorkoutController, initialScrollTarget: String? = nil, highlightedMovement: UUID? = nil) {
+        self.session = session; self.tracker = tracker; self.initialScrollTarget = initialScrollTarget
+        _selectedMovement = State(initialValue: highlightedMovement)
+    }
     private var records: [StrengthRecord] { StrengthProgress.records(in: session, history: tracker.state.history) }
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text(session.name).font(.title.bold())
@@ -30,7 +36,7 @@ struct StrengthSummaryView: View {
                 HStack { Text("Cardio estimate"); Spacer(); Text(metrics.cardioEffort.map { "\($0.formatted(.number.precision(.fractionLength(1)))) / 100" } ?? "—").bold() }
                 Text("NOOP estimate from recorded HR and your current profile; not WHOOP muscular Strain.").font(.caption).foregroundStyle(StrandPalette.textSecondary)
                 Divider()
-                Text("Heart rate").font(.title2.bold())
+                Text("Heart rate").font(.title2.bold()).id("heart-rate")
                 if metrics.points.isEmpty {
                     Text(loaded ? "No recorded heart rate. Sync your strap to fill available data; your lifting log is saved." : "Loading recorded heart rate…")
                         .foregroundStyle(StrandPalette.textSecondary)
@@ -49,9 +55,9 @@ struct StrengthSummaryView: View {
                     }
                 }
                 if !records.isEmpty {
-                    Text("Achievements").font(.title2.bold())
+                    Text("Achievements").font(.title2.bold()).id("achievements")
                     ForEach(records) { record in
-                        Button { selectedMovement = session.movements.first(where: { $0.exercise.id == record.exercise.id })?.id } label: {
+                        Button { selectedMovement = session.movements.first(where: { $0.sets.contains { $0.id == record.setID } })?.id } label: {
                             HStack(spacing: 14) {
                                 Image(systemName: "trophy.fill").font(.title).foregroundStyle(StrandPalette.zone3)
                                 VStack(alignment: .leading, spacing: 5) {
@@ -104,6 +110,10 @@ struct StrengthSummaryView: View {
             }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: selectedMovement)
+        .onChange(of: loaded) { ready in
+            if ready, let initialScrollTarget { proxy.scrollTo(initialScrollTarget, anchor: .top) }
+        }
+        }
     }
     private func selectionButton(_ name: String, id: UUID?) -> some View {
         Button(name) { selectedMovement = id; selectedMinute = nil }.buttonStyle(.bordered).tint(selectedMovement == id ? StrandPalette.accent : StrandPalette.textSecondary)

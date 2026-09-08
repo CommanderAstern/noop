@@ -68,3 +68,8 @@ Context-specific model exposure rules were not applicable. Fixtures are syntheti
 and DEBUG-only, photos stay local, and no proprietary exercise art is downloaded.
 ActivityKit lifecycle and photo-picker behavior additionally require iPhone checks;
 the automated model tests do not claim to simulate those system frameworks.
+
+16. **P2 — PR selects the wrong repeated exercise block**
+    (`Strand/Screens/StrengthSummaryView.swift:54`, GitHub Codex review of `a0904c6`).
+    Achievement selection now resolves the movement containing `record.setID`, so
+    the graph highlights the actual winning set's block.

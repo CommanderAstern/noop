@@ -31,11 +31,17 @@ struct StrengthDemoView: View {
         }
         let routine = StrengthRoutine(name: "Upper body A", movements: state.history[0].movements, restSeconds: 90, unit: .kg)
         state.routines = [routine]
-        if ["active", "rest", "exercises", "picker"].contains(mode) {
+        if ["active", "rest", "exercises", "picker", "warmup"].contains(mode) {
             state.start(routine: routine, now: now.addingTimeInterval(-300))
             let movement = state.active!.movements[0]
-            state.startSet(movementID: movement.id, setID: movement.sets[0].id, now: now.addingTimeInterval(-80))
-            state.completeSet(movementID: movement.id, setID: movement.sets[0].id, now: now.addingTimeInterval(-30))
+            if mode == "warmup" {
+                state.active!.movements[0].sets[0].kind = .warmup
+                state.active!.movements[0].sets[0].kilograms = 20
+                state.active!.movements[0].sets[0].reps = 12
+            } else {
+                state.startSet(movementID: movement.id, setID: movement.sets[0].id, now: now.addingTimeInterval(-80))
+                state.completeSet(movementID: movement.id, setID: movement.sets[0].id, now: now.addingTimeInterval(-30))
+            }
             if mode == "active" {
                 state.startSet(movementID: movement.id, setID: movement.sets[1].id, now: now.addingTimeInterval(-10))
             }
@@ -56,6 +62,12 @@ struct StrengthDemoView: View {
         Group {
             if mode == "picker" { StrengthExercisePicker(tracker: tracker) }
             else if mode == "summary", let session = tracker.state.history.first { StrengthSummaryView(session: session, tracker: tracker) }
+            else if mode == "summary-detail", let session = tracker.state.history.first {
+                StrengthSummaryView(session: session, tracker: tracker, initialScrollTarget: "heart-rate", highlightedMovement: session.movements.first?.id)
+            }
+            else if mode == "achievements", let session = tracker.state.history.first {
+                StrengthSummaryView(session: session, tracker: tracker, initialScrollTarget: "achievements", highlightedMovement: session.movements.first?.id)
+            }
             else { StrengthWorkoutsView(tracker: tracker, section: mode == "history" ? "History" : mode == "progress" ? "Progress" : "Train") }
         }
     }
