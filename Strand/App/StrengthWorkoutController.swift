@@ -46,7 +46,7 @@ final class StrengthWorkoutController: ObservableObject {
         do { state = try storage.load() }
         catch {
             readable = false
-            self.error = "Strength data could not be read. It has been kept unchanged. Restart the app and try again."
+            self.error = "Strength data could not be read. It has been kept unchanged. Unlock the phone and reopen NOOP Lab to retry."
         }
         // Expired countdowns on process launch are always consumed silently, even within grace.
         tick(allowWrist: false)
@@ -55,6 +55,8 @@ final class StrengthWorkoutController: ObservableObject {
         // Foreground entry precedes timer resumption / didBecomeActive. Consume missed
         // rests here too, so even a short lock across zero cannot buzz during unlock.
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in self?.resumeForeground() }.store(in: &lifecycle)
+        NotificationCenter.default.publisher(for: UIApplication.protectedDataDidBecomeAvailableNotification)
             .sink { [weak self] _ in self?.resumeForeground() }.store(in: &lifecycle)
         let activeName = UIApplication.didBecomeActiveNotification
         #else
@@ -109,6 +111,18 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     func resumeForeground(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
+        // A BLE launch before first unlock (or a locked legacy document) can fail its initial
+        // read. Retry on unlock without replacing a readable in-memory session or corrupt data.
+        if !readable {
+            do {
+                let restored = try storage.load()
+                readable = true
+                state = restored
+                error = nil
+                synchronizeNotification()
+                removeOrphanedNotifications()
+            } catch { return }
+        }
         // Never replay a deadline on unlocking, even if it falls inside the two-second grace.
         tick(allowWrist: false, now: now)
         // A still-future deadline remains eligible, including when unlocking just before zero.
@@ -170,7 +184,7 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func synchronizeNotification(previous: StrengthRest? = nil) {
-        guard platformServices else { return }
+        guard platformServices, readable else { return }
         let rest = state.rest.flatMap { timer in
             state.phoneAlert && !timer.consumed && timer.deadline > Date() ? timer : nil
         }
@@ -194,6 +208,7 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func removeOrphanedNotifications() {
+        guard readable else { return }
         Task { [weak self] in
             let center = UNUserNotificationCenter.current()
             let pending = await center.pendingNotificationRequests()

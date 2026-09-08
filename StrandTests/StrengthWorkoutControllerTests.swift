@@ -263,4 +263,35 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(try disk.load().rest?.consumed, true)
     }
 
+
+    func testUnlockRetriesFailedLoadWithoutReplayingExpiredRest() throws {
+        let (disk, original) = try fixture()
+        // A read failure stands in for protected data that is temporarily unavailable.
+        try Data("unavailable".utf8).write(to: disk.url)
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        XCTAssertNotNil(tracker.error)
+        XCTAssertFalse(tracker.change { $0.start(now: Date()) })
+        try disk.save(original)
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.resumeForeground(now: original.rest!.deadline, instant: runtimeEpoch)
+        XCTAssertEqual(tracker.state.active, original.active)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+        XCTAssertNil(tracker.error)
+        XCTAssertEqual(attempts, 0)
+        XCTAssertTrue(tracker.change { $0.restSeconds = 30 })
+    }
+
+    func testUnlockRetryKeepsUnreadableDocumentUntouched() throws {
+        let (disk, _) = try fixture()
+        let original = Data("invalid".utf8)
+        try original.write(to: disk.url)
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        tracker.resumeForeground()
+        XCTAssertNotNil(tracker.error)
+        XCTAssertFalse(tracker.change { $0.start(now: Date()) })
+        XCTAssertEqual(try Data(contentsOf: disk.url), original)
+    }
+
 }
