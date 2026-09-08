@@ -24,7 +24,7 @@ struct StrengthMetricsView: View {
                 Text(loaded ? "No recorded heart rate for this workout yet. Connect WHOOP and sync; lifting entries still save without it." : "Loading recorded heart rate…")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
             } else {
-                Chart(metrics.points) { point in
+                Chart(metrics.plotPoints) { point in
                     LineMark(x: .value("Minutes", point.minute), y: .value("BPM", point.bpm),
                              series: .value("Recording segment", point.segment))
                         .foregroundStyle(StrandPalette.accent)
@@ -37,6 +37,10 @@ struct StrengthMetricsView: View {
                 .accessibilityLabel("Recorded workout heart rate. Gaps longer than one minute are not connected.")
                 Text("Average \(metrics.average.map(String.init) ?? "—") · Peak \(metrics.peak ?? 0) bpm")
                     .font(StrandFont.bodyNumber)
+                if metrics.points.count > 1000 {
+                    Text("Chart condensed for display; summaries use all recorded samples.")
+                        .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
+                }
                 Text("Average covers recorded intervals up to one minute; longer gaps are excluded.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
             }

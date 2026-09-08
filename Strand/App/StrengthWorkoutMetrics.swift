@@ -17,6 +17,22 @@ struct StrengthWorkoutMetrics {
     var cardioEffort: Double?
     var truncated = false
 
+    /// Keep chart work bounded for long sessions. Scoring and averages still use all accepted HR.
+    /// Preserve bucket endpoints and extremes; segment IDs prevent bridging recording gaps.
+    var plotPoints: [Point] {
+        guard points.count > 1000 else { return points }
+        let width = (points.count + 249) / 250
+        var kept: [Int: Point] = [:]
+        for start in stride(from: 0, to: points.count, by: width) {
+            let bucket = points[start..<min(points.count, start + width)]
+            for point in [bucket.first, bucket.last, bucket.min { $0.bpm < $1.bpm },
+                          bucket.max { $0.bpm < $1.bpm }].compactMap({ $0 }) {
+                kept[point.id] = point
+            }
+        }
+        return kept.values.sorted { $0.id < $1.id }
+    }
+
     static func calculate(session: StrengthSession, samples: [HRSample], now: Date,
                           maxHR: Double, restingHR: Double, sex: String,
                           method: StrainScorer.Method, truncated: Bool = false) -> Self {

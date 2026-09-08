@@ -38,6 +38,15 @@ final class StrengthWorkoutMetricsTests: XCTestCase {
         XCTAssertNotNil(calculate(dense).cardioEffort)
         XCTAssertNil(calculate(dense, truncated: true).cardioEffort)
     }
+    func testLongRecordingChartIsBoundedAndPreservesExtremes() {
+        let samples = (1000...2200).map { HRSample(ts: $0, bpm: $0 == 1777 ? 200 : 100) }
+        let result = calculate(samples)
+        XCTAssertLessThanOrEqual(result.plotPoints.count, 1000)
+        XCTAssertEqual(result.plotPoints.first?.id, 1000)
+        XCTAssertEqual(result.plotPoints.last?.id, 2200)
+        XCTAssertTrue(result.plotPoints.contains { $0.bpm == 200 })
+        XCTAssertEqual(result.points.count, 1201)
+    }
     func testLiftingTotalsExcludeUnfinishedSetsAndRetainUnitConversion() {
         var session = StrengthSession(now: start, unit: .kg)
         var completed = StrengthSet(reps: 8, kilograms: 60)
