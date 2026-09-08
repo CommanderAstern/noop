@@ -121,7 +121,10 @@ struct StrengthWorkoutsView: View {
                 }
                 Text("Starting templates").font(.headline)
                 ForEach(StrengthRoutine.starterDays) { routine in
-                    Button { editingRoutine = routine } label: {
+                    Button {
+                        editingRoutine = StrengthRoutine(name: routine.name, movements: routine.movements,
+                            restSeconds: routine.restSeconds, unit: routine.unit)
+                    } label: {
                         HStack { StrengthExerciseArt(exercise: routine.movements[0].exercise).frame(width: 64, height: 52)
                             VStack(alignment: .leading) { Text(routine.name).font(.headline); Text("\(routine.movements.count) exercises · Warm-up included").font(.caption) }
                             Spacer(); Image(systemName: "chevron.right")

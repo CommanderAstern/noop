@@ -98,7 +98,7 @@ public final class FrameRouter {
             // byte across many frames, so an unguarded write re-renders the whole console for nothing.
             if let hr = parsed.parsed["heart_rate"]?.intValue, hr >= 30, hr <= 220 {
                 let changed = state.heartRate != hr
-                state.receiveHeartRate(hr)
+                state.receiveHeartRate(hr, publishRepeatedValue: false)
                 // Sleep & Rest test mode (Group E): bank the live HR sample for the readout's HR-density
                 // figure. Gated on the zero-cost active() Bool, so this is a no-op when the mode is off.
                 if changed && TestCentre.active(.sleep) {

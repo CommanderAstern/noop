@@ -73,3 +73,13 @@ the automated model tests do not claim to simulate those system frameworks.
     (`Strand/Screens/StrengthSummaryView.swift:54`, GitHub Codex review of `a0904c6`).
     Achievement selection now resolves the movement containing `record.setID`, so
     the graph highlights the actual winning set's block.
+
+17. **P1 — Preserve repeated HR publications from other sensors**
+    (`Strand/BLE/LiveState.swift:64`, GitHub Codex review of `3899c4a`). The receipt
+    method now defaults to publishing each valid packet, preserving existing manual
+    workout, session-runner and HR activity consumers. WHOOP's existing flood guards
+    opt out explicitly. Tests distinguish both publication cadences and invalid HR.
+18. **P2 — Opening a starter again overwrites the saved variant**
+    (`Strand/Screens/StrengthWorkoutsView.swift:124`, same review). Opening a starter
+    constructs a fresh routine and set identities. A regression checks independent
+    identities and targets for two variants of the same prototype.

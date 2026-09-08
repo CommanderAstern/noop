@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import StrengthTracking
 @testable import Strand
 
@@ -28,8 +29,12 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         let live = LiveState(); live.connected = true
         let start = Date(timeIntervalSince1970: 1000)
         var callbacks = 0; live.onHeartRateReceived = { callbacks += 1 }
-        for second in 0...20 { live.receiveHeartRate(118, at: start.addingTimeInterval(Double(second))) }
+        var publications = 0
+        let subscription = live.$heartRate.dropFirst().sink { _ in publications += 1 }
+        defer { subscription.cancel() }
+        for second in 0...20 { live.receiveHeartRate(118, at: start.addingTimeInterval(Double(second)), publishRepeatedValue: false) }
         XCTAssertEqual(callbacks, 21)
+        XCTAssertEqual(publications, 1)
         XCTAssertEqual(live.currentHeartRate(at: start.addingTimeInterval(25)), 118)
         live.receiveHeartRate(0, at: start.addingTimeInterval(29))
         XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(31)))
@@ -39,6 +44,16 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertNil(live.currentHeartRate(at: start.addingTimeInterval(33)))
         live.receiveHeartRate(118, at: start.addingTimeInterval(34))
         XCTAssertEqual(live.currentHeartRate(at: start.addingTimeInterval(35)), 118)
+    }
+    func testOtherSensorSourcesRetainRepeatedPacketPublications() {
+        let live = LiveState(); live.connected = true
+        var samples: [Int?] = []
+        let subscription = live.$heartRate.dropFirst().sink { samples.append($0) }
+        defer { subscription.cancel() }
+        for _ in 0..<3 { live.receiveHeartRate(120) }
+        live.receiveHeartRate(0)
+        XCTAssertEqual(samples, [120, 120, 120])
+        XCTAssertEqual(live.currentHeartRate(), 120)
     }
     func testSetStartAndUndoSurviveRestartAndFailedSave() throws {
         let (disk, original) = try fixture()

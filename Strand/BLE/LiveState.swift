@@ -58,10 +58,12 @@ public final class LiveState: ObservableObject {
     /// Receipt liveness is independent of value publication; constant BPM is still a fresh stream.
     private var heartRateReceivedAt: Date?
     var onHeartRateReceived: (() -> Void)?
-    func receiveHeartRate(_ bpm: Int, at now: Date = Date()) {
+    func receiveHeartRate(_ bpm: Int, at now: Date = Date(), publishRepeatedValue: Bool = true) {
         guard (30...220).contains(bpm) else { return }
         heartRateReceivedAt = now
-        if heartRate != bpm { heartRate = bpm }
+        // Preserve each source's established publisher cadence. WHOOP's raw flood opts out
+        // of repeated value publication; other sources use those events for workout sampling.
+        if publishRepeatedValue || heartRate != bpm { heartRate = bpm }
         onHeartRateReceived?()
     }
     func currentHeartRate(at now: Date = Date()) -> Int? {

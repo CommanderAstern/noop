@@ -68,6 +68,16 @@ final class StrengthFlowTests: XCTestCase {
         XCTAssertNil(routine.movements[0].sets[0].startedAt)
         XCTAssertNil(routine.movements[0].sets[0].completedAt)
     }
+    func testStarterVariantsHaveIndependentIdentityAndTargets() {
+        let starter = StrengthRoutine.starterDays[0]
+        var first = StrengthRoutine(name: starter.name, movements: starter.movements, restSeconds: starter.restSeconds, unit: starter.unit)
+        first.movements[0].sets[0].kilograms = 40
+        let second = StrengthRoutine(name: starter.name, movements: starter.movements, restSeconds: starter.restSeconds, unit: starter.unit)
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertNotEqual(first.movements[0].sets[0].id, second.movements[0].sets[0].id)
+        XCTAssertEqual(first.movements[0].sets[0].kilograms, 40)
+        XCTAssertEqual(second.movements[0].sets[0].kilograms, 0)
+    }
     func testOldSchemaDefaultsWithoutFabricatingHistory() throws {
         var original = state(); original.version = 1
         let data = try JSONEncoder().encode(original)

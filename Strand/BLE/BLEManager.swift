@@ -5332,7 +5332,7 @@ public final class BLEManager: NSObject, ObservableObject {
         // drive the value whenever it's physiologically plausible; reject 0/garbage (off-wrist).
         // AppModel medians these into a stable display value. live perf: only publish on a real
         // change so a steady resting HR doesn't re-render the whole Live console every second.
-        state.receiveHeartRate(m.hr)
+        state.receiveHeartRate(m.hr, publishRepeatedValue: false)
         // Record it continuously — independent of the realtime stream or the open screen.
         collector?.ingestStandardHR(hr: m.hr, rr: m.rr, contact: m.contact,
                                     at: Int(Date().timeIntervalSince1970))
