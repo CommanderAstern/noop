@@ -27,7 +27,7 @@ so changing the display unit does not change recorded load.
 
 ## Rest alerts
 
-Both alert options default off. **WHOOP wrist cue** attempts one acknowledged
+Both alert options default off. Wrist cues also honor the app-wide **Wrist alerts** master in Automations. **WHOOP wrist cue** attempts one acknowledged
 `runHapticsPattern` command with one loop, through the existing BLEManager mapping.
 WHOOP 5/MG retains its existing 0x13 / MaverickHaptics mapping. This deliberately
 does not call `buzzStrapOnce()`, whose existing explicit-user sequence sends both a
@@ -82,7 +82,7 @@ Do not delete the app to update it. Keep the working version available for rollb
   Exercises, weights and completed sets should survive.
 - Save a routine, finish, inspect history, then start the routine. Its targets should
   match, with no sets already marked done. Finish/restart must not duplicate history.
-- With WHOOP connected and wrist cue enabled, set rest to 15 seconds and complete a
+- With WHOOP connected, wrist cue enabled, and the Automations Wrist alerts master on, set rest to 15 seconds and complete a
   set. Keep the app active. Verify one wrist cue at zero and none for another minute.
   If the strap ignores it, use phone alerts and report strap model/firmware.
 - Start rest, navigate to another tab, and keep the app active. Check one cue at zero.

@@ -76,7 +76,7 @@ struct StrengthWorkoutsView: View {
                     historyCard
                 }
                 settingsCard
-                Text("A lifting log: no muscular-strain calculation. Strength history is stored separately from the heart-rate activity log.")
+                Text("A lifting log: no muscular-strain calculation. Strength data is separate from the heart-rate activity log and is not included in database backups. App updates keep it; deleting the app removes it.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
             }
             .screenPadding().padding(.vertical, NoopMetrics.space4)
@@ -192,7 +192,7 @@ struct StrengthWorkoutsView: View {
                 Toggle("WHOOP wrist cue", isOn: Binding(get: { tracker.state.wristAlert }, set: { enabled in
                     tracker.change { $0.wristAlert = enabled }
                 }))
-                Text("Optional and unverified on your strap. One cue attempt at zero while the app is active and WHOOP is connected. No catch-up buzz after reopening or reconnecting.")
+                Text("Optional and unverified on your strap. Also requires the Wrist alerts master in Automations. One cue attempt at zero while the app is active and WHOOP is connected. No catch-up buzz after reopening or reconnecting.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                 Toggle("Phone notification", isOn: Binding(get: { tracker.state.phoneAlert }, set: tracker.setPhoneAlert))
                 Text(tracker.notificationStatus).font(StrandFont.caption)
@@ -309,7 +309,11 @@ private struct StrengthSetRow: View {
                         .font(StrandFont.caption).foregroundStyle(StrandPalette.statusWarning)
                 }
                 HStack {
-                    Button("Complete set") { tracker.change { $0.completeSet(movementID: movementID, setID: set.id, now: Date()) } }
+                    Button("Complete set") {
+                        guard let reps = parsedReps, let kilograms = parsedWeight else { return }
+                        tracker.change { $0.recordSet(movementID: movementID, setID: set.id,
+                            reps: reps, kilograms: kilograms, now: Date()) }
+                    }
                         .buttonStyle(.borderedProminent).disabled(parsedReps == nil || parsedWeight == nil)
                     Spacer()
                     Button { tracker.change { state in

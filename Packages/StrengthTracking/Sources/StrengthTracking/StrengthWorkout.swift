@@ -128,6 +128,18 @@ public struct StrengthState: Codable, Equatable {
                                               deadline: now.addingTimeInterval(Double(restSeconds))) : nil
     }
 
+    /// Commit the visible input and its completion as one transaction (including save recovery).
+    public mutating func recordSet(movementID: UUID, setID: UUID, reps: Int, kilograms: Double, now: Date) {
+        let values = StrengthSet(reps: reps, kilograms: kilograms)
+        guard values.isValid,
+              let m = active?.movements.firstIndex(where: { $0.id == movementID }),
+              let s = active?.movements[m].sets.firstIndex(where: { $0.id == setID }),
+              active?.movements[m].sets[s].completedAt == nil else { return }
+        active?.movements[m].sets[s].reps = reps
+        active?.movements[m].sets[s].kilograms = kilograms
+        completeSet(movementID: movementID, setID: setID, now: now)
+    }
+
     public mutating func undoSet(movementID: UUID, setID: UUID) {
         guard let m = active?.movements.firstIndex(where: { $0.id == movementID }),
               let s = active?.movements[m].sets.firstIndex(where: { $0.id == setID }) else { return }

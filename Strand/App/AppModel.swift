@@ -223,8 +223,13 @@ final class AppModel: ObservableObject {
         self.repo = Repository(deviceId: deviceId)
         self.coach = AICoachEngine(repo: repo)
         self.intelligence = IntelligenceEngine(repo: repo, profile: profile, deviceId: deviceId)
-        strengthWorkouts.strapReady = { [weak self] in self?.ble.strengthRestCueReady == true }
-        strengthWorkouts.buzz = { [weak self] in self?.ble.buzzStrengthRestOnce() }
+        strengthWorkouts.strapReady = { [weak self] in
+            UserDefaults.standard.bool(forKey: Self.wristAlertsMasterKey) && self?.ble.strengthRestCueReady == true
+        }
+        strengthWorkouts.buzz = { [weak self] in
+            guard UserDefaults.standard.bool(forKey: Self.wristAlertsMasterKey) else { return }
+            self?.ble.buzzStrengthRestOnce()
+        }
         // Route the engine's per-day scoring diagnostic into the SAME shareable strap log every other
         // subsystem writes to (PII-scrubbed by `live.append(log:)`), so a bug report ships proof of what
         // was computed per day. `live` is captured strongly (created just above) , the engine outlives the

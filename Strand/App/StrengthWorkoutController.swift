@@ -19,14 +19,26 @@ final class StrengthWorkoutController: ObservableObject {
     private let storage: StrengthFileStore
     private var readable = true
     private var foreground = false
+    private var suppressedRestID: UUID?
+    private let platformServices: Bool
     private var ticker: AnyCancellable?
     private var lifecycle: Set<AnyCancellable> = []
-    private var notificationTask: Task<Void, Never>?
-    private var notificationRevision = UUID()
+    private lazy var notificationScheduler = StrengthRestScheduler(
+        add: { [weak self] rest in try await self?.addNotification(rest) },
+        remove: { id in
+            let center = UNUserNotificationCenter.current()
+            let identifier = Self.notificationPrefix + id.uuidString
+            center.removePendingNotificationRequests(withIdentifiers: [identifier])
+            center.removeDeliveredNotifications(withIdentifiers: [identifier])
+        },
+        onError: { [weak self] in
+            self?.notificationStatus = "Phone alert could not be scheduled. Keep the app open for the rest timer."
+        })
     var strapReady: () -> Bool = { false }
     var buzz: () -> Void = {}
 
     init(storage suppliedStorage: StrengthFileStore? = nil, platformServices: Bool = true) {
+        self.platformServices = platformServices
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         storage = suppliedStorage ?? StrengthFileStore(url: folder.appendingPathComponent("StrengthWorkouts/v1.json"))
         do { state = try storage.load() }
@@ -88,9 +100,15 @@ final class StrengthWorkoutController: ObservableObject {
 
     func tick(allowWrist: Bool, now: Date = Date()) {
         guard let timer = state.rest, !timer.consumed, now >= timer.deadline else { return }
+        let ready = strapReady()
+        // Persistence failure must not turn a denied cue into an eligible one on a later tick.
+        if !allowWrist || !ready || !state.wristAlert || now.timeIntervalSince(timer.deadline) > 2 {
+            suppressedRestID = timer.id
+        }
         var shouldBuzz = false
         let committed = change { next in
-            shouldBuzz = next.consumeRest(now: now, foreground: allowWrist, strapReady: strapReady())
+            shouldBuzz = next.consumeRest(now: now,
+                foreground: allowWrist && suppressedRestID != timer.id, strapReady: ready)
         }
         guard committed else { return }
         if shouldBuzz {
@@ -134,46 +152,27 @@ final class StrengthWorkoutController: ObservableObject {
     }
 
     private func synchronizeNotification(previous: StrengthRest? = nil) {
-        let previousTask = notificationTask
-        previousTask?.cancel()
-        let revision = UUID()
-        notificationRevision = revision
+        guard platformServices else { return }
+        let rest = state.rest.flatMap { timer in
+            state.phoneAlert && !timer.consumed && timer.deadline > Date() ? timer : nil
+        }
+        notificationScheduler.replace(with: rest)
+    }
+
+    private func addNotification(_ rest: StrengthRest) async throws {
         let center = UNUserNotificationCenter.current()
-        if let previous {
-            let id = Self.notificationPrefix + previous.id.uuidString
-            center.removePendingNotificationRequests(withIdentifiers: [id])
-            center.removeDeliveredNotifications(withIdentifiers: [id])
-        }
-        guard state.phoneAlert, let rest = state.rest, !rest.consumed, rest.deadline > Date() else { return }
-        let id = Self.notificationPrefix + rest.id.uuidString
-        notificationTask = Task { [weak self] in
-            // Serialize add/cancel completions, including permission-driven rescheduling of the
-            // SAME identifier. An old task must finish its cleanup before a new add can begin.
-            await previousTask?.value
-            let settings = await center.notificationSettings()
-            guard let self, !Task.isCancelled, self.notificationRevision == revision,
-                  settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
-            let delay = rest.deadline.timeIntervalSinceNow
-            guard delay > 0 else { return }
-            let content = UNMutableNotificationContent()
-            content.title = String(localized: "Rest complete")
-            content.body = String(localized: "Ready for your next set? Open NOOP Lab to continue.")
-            content.sound = .default
-            let request = UNNotificationRequest(identifier: id, content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, delay), repeats: false))
-            do {
-                try await center.add(request)
-                // add() can finish AFTER Skip/Finish/replacement. Remove that obsolete request again.
-                if Task.isCancelled || self.notificationRevision != revision {
-                    center.removePendingNotificationRequests(withIdentifiers: [id])
-                    center.removeDeliveredNotifications(withIdentifiers: [id])
-                }
-            } catch {
-                if self.notificationRevision == revision {
-                    self.notificationStatus = "Phone alert could not be scheduled. Keep the app open for the rest timer."
-                }
-            }
-        }
+        let settings = await center.notificationSettings()
+        guard !Task.isCancelled,
+              settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+        let delay = rest.deadline.timeIntervalSinceNow
+        guard delay > 0 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Rest complete")
+        content.body = String(localized: "Ready for your next set? Open NOOP Lab to continue.")
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: Self.notificationPrefix + rest.id.uuidString, content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, delay), repeats: false))
+        try await center.add(request)
     }
 
     private func removeOrphanedNotifications() {

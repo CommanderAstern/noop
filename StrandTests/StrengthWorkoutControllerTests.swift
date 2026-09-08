@@ -63,6 +63,41 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertFalse(tracker.acceptsNotification(id, now: original.rest!.deadline))
     }
 
+    func testFailedSuppressionCannotBuzzAfterSaveRecovery() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        try FileManager.default.removeItem(at: disk.url)
+        try FileManager.default.createDirectory(at: disk.url, withIntermediateDirectories: true)
+        var attempts = 0
+        tracker.strapReady = { true }
+        tracker.buzz = { attempts += 1 }
+        tracker.tick(allowWrist: false, now: original.rest!.deadline)
+        try FileManager.default.removeItem(at: disk.url)
+        try disk.save(original)
+        tracker.tick(allowWrist: true, now: original.rest!.deadline.addingTimeInterval(1))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testCompletionAfterSaveRecoveryUsesVisibleInputs() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let movement = original.active!.movements[0]
+        tracker.change { $0.undoSet(movementID: movement.id, setID: movement.sets[0].id) }
+        try FileManager.default.removeItem(at: disk.url)
+        try FileManager.default.createDirectory(at: disk.url, withIntermediateDirectories: true)
+        XCTAssertFalse(tracker.change { $0.active?.movements[0].sets[0].kilograms = 40 })
+        try FileManager.default.removeItem(at: disk.url)
+        XCTAssertTrue(tracker.change {
+            $0.recordSet(movementID: movement.id, setID: movement.sets[0].id,
+                reps: 12, kilograms: 40, now: Date())
+        })
+        let saved = try disk.load().active!.movements[0].sets[0]
+        XCTAssertEqual(saved.reps, 12)
+        XCTAssertEqual(saved.kilograms, 40)
+        XCTAssertNotNil(saved.completedAt)
+    }
+
     func testUnreadableDataBlocksWrites() throws {
         let (disk, _) = try fixture()
         let data = Data("invalid".utf8)

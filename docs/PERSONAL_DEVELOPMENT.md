@@ -71,7 +71,7 @@ need a design decision, leave a separate integration branch and report them.
 
 The scheduled check commits successful integrations locally and reports the
 changes. It does not push or publish a new phone version automatically. Review
-and push `personal` when you want a new Lab release. If Windows cannot run a
+the integration on a feature branch and open a PR into `personal` when you want a new Lab release. If Windows cannot run a
 relevant Swift check, the report must say so; the GitHub build gates publication.
 
 ## Backups and rollback
