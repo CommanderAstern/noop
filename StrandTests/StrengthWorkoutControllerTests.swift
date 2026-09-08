@@ -4,6 +4,7 @@ import StrengthTracking
 
 @MainActor
 final class StrengthWorkoutControllerTests: XCTestCase {
+    private let runtimeEpoch = ContinuousClock.now
     func fixture() throws -> (StrengthFileStore, StrengthState) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
@@ -119,11 +120,11 @@ final class StrengthWorkoutControllerTests: XCTestCase {
             attempts += 1
         }
         // No foreground lifecycle event: models timer / Bluetooth callbacks while locked.
-        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), uptime: 100)
-        tracker.runtimeTick(now: deadline, uptime: 101)
-        tracker.runtimeTick(now: deadline, uptime: 101)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
         tracker.resumeForeground(now: deadline.addingTimeInterval(0.5))
-        tracker.runtimeTick(now: deadline.addingTimeInterval(1), uptime: 102)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), instant: runtimeEpoch.advanced(by: .seconds(102)))
         XCTAssertEqual(attempts, 1)
     }
 
@@ -134,9 +135,10 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         var attempts = 0
         tracker.strapReady = { true }
         tracker.buzz = { attempts += 1 }
-        tracker.runtimeTick(now: deadline.addingTimeInterval(-10), uptime: 100)
-        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 110.5)
-        tracker.runtimeTick(now: deadline.addingTimeInterval(1), uptime: 111)
+        // Continuous-clock advancement includes device sleep even when awake uptime barely changes.
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-10), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(110.5)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1), instant: runtimeEpoch.advanced(by: .seconds(111)))
         XCTAssertEqual(attempts, 0)
         XCTAssertEqual(try disk.load().rest?.consumed, true)
     }
@@ -148,9 +150,9 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         var attempts = 0
         tracker.strapReady = { true }
         tracker.buzz = { attempts += 1 }
-        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), uptime: 100)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch.advanced(by: .seconds(100)))
         tracker.resumeForeground(now: deadline)
-        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 101)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(101)))
         XCTAssertEqual(attempts, 0)
         let movement = original.active!.movements[0]
         tracker.change {
@@ -158,8 +160,8 @@ final class StrengthWorkoutControllerTests: XCTestCase {
             $0.completeSet(movementID: movement.id, setID: movement.sets[0].id, now: deadline)
         }
         let next = tracker.state.rest!.deadline
-        tracker.runtimeTick(now: next.addingTimeInterval(-1), uptime: 190)
-        tracker.runtimeTick(now: next, uptime: 191)
+        tracker.runtimeTick(now: next.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(190)))
+        tracker.runtimeTick(now: next, instant: runtimeEpoch.advanced(by: .seconds(191)))
         XCTAssertEqual(attempts, 1)
     }
 
@@ -171,10 +173,10 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         var connected = false
         tracker.strapReady = { connected }
         tracker.buzz = { attempts += 1 }
-        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), uptime: 100)
-        tracker.runtimeTick(now: deadline, uptime: 101)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: deadline, instant: runtimeEpoch.advanced(by: .seconds(101)))
         connected = true
-        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), uptime: 101.5)
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(101.5)))
         XCTAssertEqual(attempts, 0)
         XCTAssertEqual(try disk.load().rest?.consumed, true)
     }
@@ -185,8 +187,8 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         var attempts = 0
         tracker.strapReady = { true }
         tracker.buzz = { attempts += 1 }
-        tracker.runtimeTick(now: original.rest!.deadline, uptime: 100)
-        tracker.runtimeTick(now: original.rest!.deadline.addingTimeInterval(0.5), uptime: 100.5)
+        tracker.runtimeTick(now: original.rest!.deadline, instant: runtimeEpoch.advanced(by: .seconds(100)))
+        tracker.runtimeTick(now: original.rest!.deadline.addingTimeInterval(0.5), instant: runtimeEpoch.advanced(by: .seconds(100.5)))
         XCTAssertEqual(attempts, 0)
         XCTAssertEqual(try disk.load().rest?.consumed, true)
     }

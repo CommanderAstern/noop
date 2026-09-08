@@ -18,7 +18,7 @@ final class StrengthWorkoutController: ObservableObject {
     @Published private(set) var restStatus: String?
     private let storage: StrengthFileStore
     private var readable = true
-    private var lastRuntimeTick: TimeInterval?
+    private var lastRuntimeTick: ContinuousClock.Instant?
     private var suppressedRestID: UUID?
     private let platformServices: Bool
     private var ticker: AnyCancellable?
@@ -92,10 +92,11 @@ final class StrengthWorkoutController: ObservableObject {
     /// The workout's HR stream can wake us through the existing bluetooth-central mode.
     /// A timer or HR callback may attempt the cue with the screen off, but only if execution
     /// stayed fresh. A delayed callback after suspension consumes the rest without buzzing.
-    func runtimeTick(now: Date = Date(), uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        let gap = lastRuntimeTick.map { uptime - $0 }
-        lastRuntimeTick = uptime
-        tick(allowWrist: gap.map { $0 >= 0 && $0 <= 2 } ?? false, now: now)
+    func runtimeTick(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
+        // ContinuousClock includes device sleep; systemUptime does not.
+        let gap = lastRuntimeTick.map { $0.duration(to: instant) }
+        lastRuntimeTick = instant
+        tick(allowWrist: gap.map { $0 >= .zero && $0 <= .seconds(2) } ?? false, now: now)
     }
 
     func resumeForeground(now: Date = Date()) {
