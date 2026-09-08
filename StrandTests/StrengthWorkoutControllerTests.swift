@@ -207,4 +207,40 @@ final class StrengthWorkoutControllerTests: XCTestCase {
         XCTAssertEqual(attempts, 1)
     }
 
+
+    func testReconnectAfterDeadlineWithoutDeadlineTickCannotBuzz() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var connected = false
+        var attempts = 0
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5), instant: runtimeEpoch)
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        tracker.runtimeTick(now: deadline.addingTimeInterval(1),
+            instant: runtimeEpoch.advanced(by: .seconds(1.5)))
+        XCTAssertEqual(attempts, 0)
+        XCTAssertEqual(try disk.load().rest?.consumed, true)
+    }
+
+    func testReconnectBeforeDeadlineAllowsFreshCue() throws {
+        let (disk, original) = try fixture()
+        let tracker = StrengthWorkoutController(storage: disk, platformServices: false)
+        let deadline = original.rest!.deadline
+        var connected = false
+        var attempts = 0
+        tracker.strapReady = { connected }
+        tracker.buzz = { attempts += 1 }
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-1), instant: runtimeEpoch)
+        connected = true
+        tracker.runtimeTick(now: deadline.addingTimeInterval(-0.5),
+            instant: runtimeEpoch.advanced(by: .seconds(0.5)))
+        tracker.runtimeTick(now: deadline,
+            instant: runtimeEpoch.advanced(by: .seconds(1)))
+        XCTAssertEqual(attempts, 1)
+    }
+
 }

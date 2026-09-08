@@ -19,6 +19,7 @@ final class StrengthWorkoutController: ObservableObject {
     private let storage: StrengthFileStore
     private var readable = true
     private var lastRuntimeTick: ContinuousClock.Instant?
+    private var lastRuntimeReady = false
     private var suppressedRestID: UUID?
     private let platformServices: Bool
     private var ticker: AnyCancellable?
@@ -96,7 +97,11 @@ final class StrengthWorkoutController: ObservableObject {
         // ContinuousClock includes device sleep; systemUptime does not.
         let gap = lastRuntimeTick.map { $0.duration(to: instant) }
         lastRuntimeTick = instant
-        tick(allowWrist: gap.map { $0 >= .zero && $0 <= .seconds(2) } ?? false, now: now)
+        // A ready callback after zero must not replay a rest crossed while disconnected
+        // or disabled, even if the last unavailable callback was just before zero.
+        let previouslyReady = lastRuntimeReady
+        lastRuntimeReady = strapReady() && state.wristAlert
+        tick(allowWrist: previouslyReady && (gap.map { $0 >= .zero && $0 <= .seconds(2) } ?? false), now: now)
     }
 
     func resumeForeground(now: Date = Date(), instant: ContinuousClock.Instant = ContinuousClock.now) {
@@ -104,6 +109,7 @@ final class StrengthWorkoutController: ObservableObject {
         tick(allowWrist: false, now: now)
         // A still-future deadline remains eligible, including when unlocking just before zero.
         lastRuntimeTick = instant
+        lastRuntimeReady = strapReady() && state.wristAlert
     }
 
     func tick(allowWrist: Bool, now: Date = Date()) {
