@@ -241,7 +241,7 @@ struct RootTabView: View {
         // through the change callback. Both route through the same screens as the centre FAB.
         .onAppear {
             #if DEBUG
-            if DemoScreens.isStrengthMenu { selectedTab = 4 }
+            if DemoScreens.isStrengthMenu || CommandLine.arguments.contains("strength-minimized") || CommandLine.arguments.contains("strength-island") { selectedTab = 4 }
             #endif
             presentPendingHomeScreenQuickActionIfPossible()
         }

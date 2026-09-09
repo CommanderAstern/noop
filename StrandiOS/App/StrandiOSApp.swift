@@ -402,6 +402,8 @@ private struct iOSRootView: View {
         if DemoScreens.isStrengthMenu {
             return AnyView(RootTabView(homeScreenQuickActionsEnabled: true, strength: model.strengthWorkouts))
         }
+        if CommandLine.arguments.contains("strength-minimized") { return AnyView(StrengthDemoView(mode: "minimized")) }
+        if CommandLine.arguments.contains("strength-island") { return AnyView(StrengthDemoView(mode: "island")) }
         if let demo = DemoScreens.requested {
             // Inherit the app appearance (set via the Theme picker, or `-theme.appearance light|dark`
             // in the launch arguments) so demo/marketing shots can be taken in either scheme.
@@ -539,6 +541,12 @@ enum DemoScreens {
         case "strength-summary-detail": return AnyView(StrengthDemoView(mode: "summary-detail"))
         case "strength-summary-plain": return AnyView(StrengthDemoView(mode: "summary-plain"))
         case "strength-achievements": return AnyView(StrengthDemoView(mode: "achievements"))
+        case "strength-template": return AnyView(StrengthDemoView(mode: "template"))
+        case "strength-custom": return AnyView(StrengthDemoView(mode: "custom"))
+        case "strength-settings": return AnyView(StrengthDemoView(mode: "settings"))
+        case "strength-edit-set": return AnyView(StrengthDemoView(mode: "edit-set"))
+        case "strength-minimized": return AnyView(StrengthDemoView(mode: "minimized"))
+        case "strength-island": return AnyView(StrengthDemoView(mode: "island"))
         case "health":   return AnyView(HealthView())
         case "insights": return AnyView(InsightsView())
         case "explore":  return AnyView(MetricExplorerView())

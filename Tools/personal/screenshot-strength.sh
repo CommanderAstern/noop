@@ -21,8 +21,8 @@ xcrun simctl status_bar "$DEVICE" override --time '9:41' --batteryState charged 
 APP=$(find build/strength-simulator/Build/Products/Debug-iphonesimulator -maxdepth 1 -name '*.app' -type d | head -1)
 xcrun simctl install "$DEVICE" "$APP"
 xcrun swiftc Tools/personal/check-strength-capture.swift -o "$RUNNER_TEMP/check-strength-capture"
-# Focused native captures for the zone/navigation change, including the persisted toggle off state.
-for screen in more active rest summary-detail summary-plain; do
+# Full native strength flow; all seeded readings/history are synthetic demo data.
+for screen in more home template picker machines custom warmup active rest exercises edit-set settings minimized history progress summary summary-detail summary-plain achievements island; do
   xcrun simctl terminate "$DEVICE" com.commanderastern.noop || true
   xcrun simctl launch --stdout="$RUNNER_TEMP/strength-$screen.stdout" --stderr="$RUNNER_TEMP/strength-$screen.stderr" \
     "$DEVICE" com.commanderastern.noop --demo-screen "strength-$screen" -theme.appearance dark
@@ -42,3 +42,8 @@ for screen in more active rest summary-detail summary-plain; do
     exit 1
   fi
 done
+# Keep the actual system Live Activity visible while another app is foreground.
+# This is a compact Dynamic Island capture, not a composited widget mockup.
+xcrun simctl launch "$DEVICE" com.apple.Preferences
+sleep 5
+xcrun simctl io "$DEVICE" screenshot "build/strength-screenshots/dynamic-island.png"

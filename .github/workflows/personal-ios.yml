@@ -140,7 +140,7 @@ jobs:
           gh release edit "v${VERSION}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
 
   screenshots:
-    if: github.repository == 'CommanderAstern/noop' && github.event_name == 'pull_request'
+    if: github.repository == 'CommanderAstern/noop' && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/personal'))
     runs-on: macos-26
     timeout-minutes: 45
     steps:
