@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import StrengthTracking
+import StrandAnalytics
 import UserNotifications
 #if os(iOS)
 import UIKit
@@ -39,6 +40,7 @@ final class StrengthWorkoutController: ObservableObject {
         presented = true
     }
     var liveReading: () -> (bpm: Int?, zone: Int?) = { (nil, nil) }
+    var heartRateZones: () -> HRZoneSet = { HRZones.zones(maxHR: 190) }
     private let storage: StrengthFileStore
     private var readable = true
     private var lastRuntimeTick: ContinuousClock.Instant?

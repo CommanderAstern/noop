@@ -18,6 +18,8 @@ struct StrengthWorkoutMetrics {
     var truncated = false
     var coveredSeconds = 0
     var zoneSeconds = Array(repeating: 0, count: 6)
+    // Retain the boundaries used by this calculation, so labels and totals refresh together.
+    var zoneSet = HRZones.zones(maxHR: 190)
 
     /// Keep chart work bounded for long sessions. Scoring and averages still use all accepted HR.
     /// Preserve bucket endpoints and extremes; segment IDs prevent bridging recording gaps.
@@ -47,6 +49,7 @@ struct StrengthWorkoutMetrics {
         }
         let accepted = unique.values.sorted { $0.ts < $1.ts }
         var result = Self()
+        result.zoneSet = zones ?? HRZones.zones(maxHR: maxHR)
         result.truncated = truncated
         var previous: Int?
         var segment = 0
@@ -62,7 +65,7 @@ struct StrengthWorkoutMetrics {
             // do not credit a sample with a long disconnect or extrapolate beyond the last reading.
             var weightedBPM = 0.0
             var coveredSeconds = 0
-            let displayZones = zones ?? HRZones.zones(maxHR: maxHR)
+            let displayZones = result.zoneSet
             for (sample, next) in zip(accepted, accepted.dropFirst()) {
                 let seconds = next.ts - sample.ts
                 guard (1...60).contains(seconds) else { continue }

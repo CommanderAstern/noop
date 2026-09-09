@@ -103,25 +103,8 @@ struct StrengthSessionView: View {
         VStack(spacing: 12) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let reading = tracker.liveReading()
-                VStack(spacing: 7) {
-                    Text("HEART RATE").font(.caption).tracking(2).foregroundStyle(StrandPalette.textSecondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(reading.bpm.map(String.init) ?? "—").font(.system(size: session.openRest == nil ? 56 : 44, weight: .bold, design: .rounded)).monospacedDigit()
-                        Text("bpm").foregroundStyle(StrandPalette.textSecondary)
-                    }
-                    Text(reading.zone.map { $0 == 0 ? "Below Zone 1" : "Zone \($0) · \(["", "Very light", "Light", "Moderate", "Hard", "Maximum"][$0])" } ?? "Waiting for live heart rate")
-                        .foregroundStyle(StrandPalette.accent)
-                    HStack(spacing: 4) {
-                        ForEach(0...5, id: \.self) { zone in
-                            VStack(spacing: 5) {
-                                RoundedRectangle(cornerRadius: 4).fill(zone == 0 ? Color.gray : StrandPalette.hrZones[zone])
-                                    .frame(height: 16).overlay { if reading.zone == zone { Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(.white) } }
-                                Text(zone == 0 ? "Below" : "Z\(zone)").font(.caption2)
-                            }
-                        }
-                    }.accessibilityElement(children: .ignore).accessibilityLabel(reading.zone.map { "Current heart rate zone \($0)" } ?? "Heart rate unavailable")
-                    Text("\(strengthTime(Int(context.date.timeIntervalSince(session.startedAt)))) elapsed").font(.caption).monospacedDigit()
-                }.frame(maxWidth: .infinity)
+                StrengthHeartRateView(bpm: reading.bpm, scale: StrengthZoneScale(zones: tracker.heartRateZones()),
+                    elapsed: strengthTime(Int(context.date.timeIntervalSince(session.startedAt))), compact: session.openRest != nil)
             }
             Divider()
             if let open = session.openRest {

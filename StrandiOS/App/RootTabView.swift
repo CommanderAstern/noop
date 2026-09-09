@@ -240,6 +240,9 @@ struct RootTabView: View {
         // A cold-launch selection is already pending when this shell appears; a warm selection arrives
         // through the change callback. Both route through the same screens as the centre FAB.
         .onAppear {
+            #if DEBUG
+            if DemoScreens.isStrengthMenu { selectedTab = 4 }
+            #endif
             presentPendingHomeScreenQuickActionIfPossible()
         }
         .onChange(of: homeScreenQuickActions.pendingAction) { _, _ in
@@ -430,6 +433,7 @@ struct RootTabView: View {
             ScreenScaffold(title: "More", subtitle: "Everything else, one tap away",
                            onRefresh: { await repo.refresh() },
                            topBackground: liquidScaffoldSky()) {
+                StrengthTrainingShortcut(tracker: strength)
                 moreSection("Insights") {
                     MoreRow("What Moves You", "wand.and.sparkles", .insightsHub)
                     MoreRow("Intelligence", "brain.head.profile", .intelligence)

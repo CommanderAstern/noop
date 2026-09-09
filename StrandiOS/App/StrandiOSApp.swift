@@ -399,6 +399,9 @@ private struct iOSRootView: View {
         // DEBUG-only: `--demo-screen <name>` renders one screen full-bleed (gates bypassed) so a
         // seeded simulator build can be screenshotted deterministically for verification + marketing.
         // No-op in Release (whole branch is #if DEBUG) and when the arg is absent.
+        if DemoScreens.isStrengthMenu {
+            return AnyView(RootTabView(homeScreenQuickActionsEnabled: true, strength: model.strengthWorkouts))
+        }
         if let demo = DemoScreens.requested {
             // Inherit the app appearance (set via the Theme picker, or `-theme.appearance light|dark`
             // in the launch arguments) so demo/marketing shots can be taken in either scheme.
@@ -502,6 +505,11 @@ private struct iOSRootView: View {
 /// DEBUG-only screenshot harness. Maps `--demo-screen <name>` to a single screen so a seeded
 /// simulator build can be captured deterministically (verification + marketing). Stripped from Release.
 enum DemoScreens {
+    static var isStrengthMenu: Bool {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--demo-screen"), i + 1 < args.count else { return false }
+        return args[i + 1] == "strength-more"
+    }
     /// The screen named by `--demo-screen <name>`, or nil if the arg is absent/unknown.
     static var requested: AnyView? {
         let args = CommandLine.arguments
@@ -529,6 +537,7 @@ enum DemoScreens {
         case "strength-rest": return AnyView(StrengthDemoView(mode: "rest"))
         case "strength-warmup": return AnyView(StrengthDemoView(mode: "warmup"))
         case "strength-summary-detail": return AnyView(StrengthDemoView(mode: "summary-detail"))
+        case "strength-summary-plain": return AnyView(StrengthDemoView(mode: "summary-plain"))
         case "strength-achievements": return AnyView(StrengthDemoView(mode: "achievements"))
         case "health":   return AnyView(HealthView())
         case "insights": return AnyView(InsightsView())

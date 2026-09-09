@@ -13,6 +13,7 @@ struct StrengthSummaryView: View {
     @State private var selectedMovement: UUID?
     @State private var selectedMinute: Double?
     @State private var routine: StrengthRoutine?
+    @AppStorage("strength.summaryZones") private var showZones = true
     private let initialScrollTarget: String?
     init(session: StrengthSession, tracker: StrengthWorkoutController, initialScrollTarget: String? = nil, highlightedMovement: UUID? = nil) {
         self.session = session; self.tracker = tracker; self.initialScrollTarget = initialScrollTarget
@@ -36,7 +37,13 @@ struct StrengthSummaryView: View {
                 HStack { Text("Cardio estimate"); Spacer(); Text(metrics.cardioEffort.map { "\($0.formatted(.number.precision(.fractionLength(1)))) / 100" } ?? "—").bold() }
                 Text("NOOP estimate from recorded HR and your current profile; not WHOOP muscular Strain.").font(.caption).foregroundStyle(StrandPalette.textSecondary)
                 Divider()
-                Text("Heart rate").font(.title2.bold()).id("heart-rate")
+                HStack {
+                    Text("Heart rate").font(.title2.bold())
+                    Spacer()
+                    Toggle(isOn: $showZones) { Label("Zones", systemImage: "square.3.layers.3d") }
+                        .toggleStyle(.button).font(.subheadline)
+                        .disabled(metrics.points.isEmpty)
+                }.id("heart-rate")
                 if metrics.points.isEmpty {
                     Text(loaded ? "No recorded heart rate. Sync your strap to fill available data; your lifting log is saved." : "Loading recorded heart rate…")
                         .foregroundStyle(StrandPalette.textSecondary)
@@ -47,11 +54,22 @@ struct StrengthSummaryView: View {
                             ForEach(session.movements) { selectionButton($0.exercise.name, id: $0.id) }
                         }
                     }
-                    StrengthHeartChart(session: session, metrics: metrics, movementID: selectedMovement, selectedMinute: $selectedMinute)
+                    StrengthHeartChart(session: session, metrics: metrics, movementID: selectedMovement, showZones: showZones, selectedMinute: $selectedMinute)
                     Text("Average \(metrics.average.map(String.init) ?? "—") · Peak \(metrics.peak.map(String.init) ?? "—") bpm").font(.subheadline.monospacedDigit())
-                    Text("Recorded coverage: \(strengthTime(metrics.coveredSeconds)). Gaps over one minute are excluded. Highlighted bands use recorded set start/end times; dots mark completions without start times.").font(.caption).foregroundStyle(StrandPalette.textSecondary)
-                    DisclosureGroup("Time in heart-rate zones") {
-                        ForEach(0...5, id: \.self) { zone in HStack { Text(zone == 0 ? "Below Zone 1" : "Zone \(zone)"); Spacer(); Text(strengthTime(metrics.zoneSeconds[zone])).monospacedDigit() }.padding(.vertical, 4) }
+                    Text("Recorded coverage: \(strengthTime(metrics.coveredSeconds)). Gaps over one minute are excluded. The exercise strip shows recorded sets; dots mark completions without a start time.").font(.caption).foregroundStyle(StrandPalette.textSecondary)
+                    DisclosureGroup("Time in zones") {
+                        ForEach(0...5, id: \.self) { zone in
+                            HStack(spacing: 10) {
+                                Circle().fill(strengthZoneColor(zone)).frame(width: 8, height: 8).accessibilityHidden(true)
+                                VStack(alignment: .leading) {
+                                    Text(StrengthZoneScale.name(zone))
+                                    Text(StrengthZoneScale(zones: metrics.zoneSet).range(zone)).font(.caption).foregroundStyle(StrandPalette.textSecondary)
+                                }
+                                Spacer()
+                                Text(strengthTime(metrics.zoneSeconds[zone])).monospacedDigit()
+                            }.padding(.vertical, 4)
+                        }
+                        Text("Uses your current profile zones. Only recorded intervals are counted.").font(.caption).foregroundStyle(StrandPalette.textSecondary)
                     }
                 }
                 if !records.isEmpty {
@@ -117,49 +135,5 @@ struct StrengthSummaryView: View {
     }
     private func selectionButton(_ name: String, id: UUID?) -> some View {
         Button(name) { selectedMovement = id; selectedMinute = nil }.buttonStyle(.bordered).tint(selectedMovement == id ? StrandPalette.accent : StrandPalette.textSecondary)
-    }
-}
-
-struct StrengthHeartChart: View {
-    let session: StrengthSession
-    let metrics: StrengthWorkoutMetrics
-    let movementID: UUID?
-    @Binding var selectedMinute: Double?
-    private var sets: [StrengthSet] { session.movements.filter { $0.id == movementID }.flatMap(\.sets).filter { $0.completedAt != nil } }
-    private var yMin: Int { max(30, (metrics.points.map(\.bpm).min() ?? 60) - 10) }
-    private var yMax: Int { min(230, (metrics.peak ?? 180) + 10) }
-    private func minute(_ date: Date) -> Double { date.timeIntervalSince(session.startedAt) / 60 }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Chart {
-                ForEach(sets) { set in
-                    if let start = set.startedAt, let end = set.completedAt {
-                        RectangleMark(xStart: .value("Start", minute(start)), xEnd: .value("End", minute(end)), yStart: .value("Low", yMin), yEnd: .value("High", yMax))
-                            .foregroundStyle(StrandPalette.accent.opacity(0.16))
-                    } else if let end = set.completedAt {
-                        RuleMark(x: .value("Completion", minute(end))).foregroundStyle(StrandPalette.accent.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3]))
-                    }
-                }
-                ForEach(metrics.plotPoints) { point in
-                    LineMark(x: .value("Minutes", point.minute), y: .value("BPM", point.bpm), series: .value("Segment", point.segment)).foregroundStyle(StrandPalette.accent)
-                }
-                if let selectedMinute { RuleMark(x: .value("Selected time", selectedMinute)).foregroundStyle(StrandPalette.textSecondary) }
-            }.chartYScale(domain: yMin...max(yMin + 1, yMax)).chartXAxisLabel("Minutes since start").chartYAxisLabel("bpm").frame(height: 210)
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Rectangle().fill(.clear).contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { value in
-                            let x = value.location.x - geometry[proxy.plotAreaFrame].origin.x
-                            if let minute: Double = proxy.value(atX: x) { selectedMinute = minute }
-                        })
-                    }
-                }
-            if let selectedMinute, let point = metrics.points.min(by: { abs($0.minute - selectedMinute) < abs($1.minute - selectedMinute) }), abs(point.minute - selectedMinute) <= 1 {
-                Text("\(strengthTime(Int(point.minute * 60))) · \(point.bpm) bpm").font(.caption.monospacedDigit())
-                if let movement = session.movements.first(where: { $0.sets.contains { set in
-                    guard let start = set.startedAt, let end = set.completedAt else { return false }
-                    return point.minute >= minute(start) && point.minute <= minute(end)
-                } }) { Text(movement.exercise.name).font(.caption).foregroundStyle(StrandPalette.accent) }
-            }
-        }
     }
 }
