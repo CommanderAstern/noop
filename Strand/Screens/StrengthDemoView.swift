@@ -55,12 +55,15 @@ struct StrengthDemoView: View {
         try? disk.save(state)
         let controller = StrengthWorkoutController(storage: disk, platformServices: false)
         controller.liveReading = { (118, 2) }
+        let demoZones = HRZones.zones(maxHR: 190, customLowerBounds: [90, 110, 130, 150, 170])
+        controller.heartRateZones = { demoZones }
         controller.loadMetrics = { session in
             let count = Int((session.finishedAt ?? now).timeIntervalSince(session.startedAt))
             let samples = (0...max(0, count)).map { second in HRSample(ts: Int(session.startedAt.timeIntervalSince1970) + second, bpm: 120 + Int(32 * sin(Double(second) / 90))) }
-            return .calculate(session: session, samples: samples, now: now, maxHR: 190, restingHR: 60, sex: "male", method: .edwards)
+            return .calculate(session: session, samples: samples, now: now, maxHR: 190, restingHR: 60, sex: "male", method: .edwards, zones: demoZones)
         }
         UserDefaults.standard.set(mode == "exercises" ? "Exercises" : "Live", forKey: "strength.sessionTab")
+        UserDefaults.standard.set(mode != "summary-plain", forKey: "strength.summaryZones")
         _tracker = StateObject(wrappedValue: controller)
     }
     var body: some View {
@@ -68,7 +71,7 @@ struct StrengthDemoView: View {
             if mode == "picker" { StrengthExercisePicker(tracker: tracker) }
             else if mode == "machines" { StrengthExercisePicker(tracker: tracker, libraryOnly: true, equipment: "Machine") }
             else if mode == "summary", let session = tracker.state.history.first { StrengthSummaryView(session: session, tracker: tracker) }
-            else if mode == "summary-detail", let session = tracker.state.history.first {
+            else if ["summary-detail", "summary-plain"].contains(mode), let session = tracker.state.history.first {
                 StrengthSummaryView(session: session, tracker: tracker, initialScrollTarget: "heart-rate", highlightedMovement: session.movements.first?.id)
             }
             else if mode == "achievements", let session = tracker.state.history.first {

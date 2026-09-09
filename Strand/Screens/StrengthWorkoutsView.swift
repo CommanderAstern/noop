@@ -2,6 +2,31 @@ import SwiftUI
 import StrandDesign
 import StrengthTracking
 
+/// A direct entry into the same root-owned presenter used by the minimized workout.
+struct StrengthTrainingShortcut: View {
+    @ObservedObject var tracker: StrengthWorkoutController
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Training").strandOverline()
+            Button { tracker.requestPresentation(sessionID: tracker.state.active?.id) } label: {
+                HStack(spacing: 14) {
+                    StrengthExerciseArt(exercise: StrengthExercise.catalog[1]).frame(width: 64, height: 64)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Strength Training").font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                        Text(tracker.state.active.map { "Resume \($0.name)" } ?? "Routines, workouts & lift progress")
+                            .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").foregroundStyle(StrandPalette.textSecondary)
+                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(StrandPalette.surfaceRaised, in: RoundedRectangle(cornerRadius: 16))
+                    .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(StrandPalette.accent.opacity(0.4), lineWidth: 1) }
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
+            }.buttonStyle(.plain)
+        }
+    }
+}
+
 struct StrengthWorkoutEntryView: View {
     @ObservedObject var tracker: StrengthWorkoutController
     var body: some View {

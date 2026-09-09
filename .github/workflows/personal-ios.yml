@@ -121,6 +121,9 @@ jobs:
           a minimized-session bar and rest Live Activities for Dynamic Island / Lock Screen.
           Rest duration controls live in Exercises. No proprietary muscular-strain calculation.
 
+          New: direct Strength Training access from More, a unified live BPM/zone panel,
+          named BPM ranges, and optional post-workout zone shading with aligned set intervals.
+
           Wrist cues use one supported haptic command and require real-strap testing. Screen-off
           cues remain best effort; enable phone notifications as fallback. Missed cues never replay.
           See docs/STRENGTH_TRACKER.md in the repository for installation and acceptance checks.

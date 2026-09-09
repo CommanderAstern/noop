@@ -234,6 +234,9 @@ final class AppModel: ObservableObject {
             guard let self, let bpm = self.live.currentHeartRate() else { return (nil, nil) }
             return (bpm, self.profile.hrZoneSet.zoneNumber(forBPM: Double(bpm)))
         }
+        strengthWorkouts.heartRateZones = { [weak self] in
+            self?.profile.hrZoneSet ?? HRZones.zones(maxHR: 190)
+        }
         live.onHeartRateReceived = { [weak self] in self?.strengthWorkouts.runtimeTick() }
         strengthWorkouts.loadMetrics = { [weak self] session in
             guard let self else { return StrengthWorkoutMetrics() }

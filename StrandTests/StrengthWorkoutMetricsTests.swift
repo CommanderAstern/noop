@@ -68,5 +68,66 @@ final class StrengthWorkoutMetricsTests: XCTestCase {
             sex: "male", method: .edwards, zones: zones)
         XCTAssertEqual(result.coveredSeconds, 60)
         XCTAssertEqual(result.zoneSeconds, [0, 0, 30, 0, 30, 0])
+        XCTAssertEqual(result.zoneSet, zones)
+    }
+
+    func testDisplayRangesAgreeWithFractionalAnalyticsBoundaries() {
+        let zones = HRZones.zones(maxHR: 187)
+        let scale = StrengthZoneScale(zones: zones)
+        XCTAssertEqual(scale.starts, [94, 113, 131, 150, 169])
+        XCTAssertEqual(scale.range(1), "94–112 bpm")
+        XCTAssertEqual(scale.range(5), "169+ bpm")
+        for bpm in 30...220 {
+            let expected = scale.starts.filter { Double(bpm) >= $0 }.count
+            XCTAssertEqual(scale.number(for: bpm), expected, "\(bpm) bpm")
+        }
+        XCTAssertEqual(scale.nextBoundary(for: 112), "Light starts at 113 bpm")
+    }
+
+    func testCustomZoneBarAndGraphShareBoundariesAndHandleAboveMaximum() {
+        let scale = StrengthZoneScale(zones: HRZones.zones(maxHR: 190, customLowerBounds: [90, 110, 130, 150, 210]))
+        XCTAssertEqual(scale.number(for: 209), 4)
+        XCTAssertEqual(scale.number(for: 220), 5)
+        XCTAssertEqual(scale.range(4), "150–209 bpm")
+        XCTAssertEqual(scale.domain.upperBound, 230)
+        let bands = scale.bands(in: 60...240)
+        XCTAssertEqual(bands.first?.lower, 60)
+        XCTAssertEqual(bands.last?.upper, 240)
+        for pair in zip(bands, bands.dropFirst()) { XCTAssertEqual(pair.0.upper, pair.1.lower) }
+        XCTAssertEqual(scale.fraction(0), 0)
+        XCTAssertEqual(scale.fraction(300), 1)
+        XCTAssertEqual(scale.fraction(110), 0.25, accuracy: 0.0001)
+    }
+
+    func testCloseCustomBoundariesDoNotOverlapTicksOrInventIntegerRanges() {
+        let scale = StrengthZoneScale(zones: HRZones.zones(maxHR: 190, customLowerBounds: [90.1, 90.2, 91, 130, 170]))
+        XCTAssertEqual(scale.range(1), "No whole-BPM readings")
+        XCTAssertEqual(scale.number(for: 91), 3)
+        XCTAssertEqual(scale.nextBoundary(for: 90), "Moderate starts at 91 bpm")
+        XCTAssertFalse(scale.bands().contains { $0.id == 1 || $0.id == 2 })
+        let ticks = scale.visibleTicks(width: 240)
+        for pair in zip(ticks, ticks.dropFirst()) {
+            XCTAssertGreaterThanOrEqual((scale.fraction(pair.1) - scale.fraction(pair.0)) * 240, 32)
+        }
+    }
+
+    func testTimelinePreservesLegacyCompletionWithoutInventingAStartAndKeepsSessionDuration() {
+        var session = StrengthSession(now: start, unit: .kg)
+        session.finishedAt = start.addingTimeInterval(2400)
+        var timed = StrengthSet(reps: 8, kilograms: 60)
+        timed.startedAt = start.addingTimeInterval(120); timed.completedAt = start.addingTimeInterval(160)
+        var legacy = StrengthSet(reps: 8, kilograms: 60); legacy.completedAt = start.addingTimeInterval(400)
+        var outside = legacy; outside.id = UUID(); outside.completedAt = start.addingTimeInterval(2500)
+        session.movements = [StrengthMovement(exercise: StrengthExercise.catalog[1], sets: [timed, legacy, outside, StrengthSet()])]
+        let all = StrengthExerciseTimeline(session: session, movementID: nil)
+        let selected = StrengthExerciseTimeline(session: session, movementID: session.movements[0].id)
+        XCTAssertEqual(all.duration, 40)
+        XCTAssertEqual(selected.duration, all.duration)
+        XCTAssertEqual(all.marks.count, 2)
+        XCTAssertEqual(all.marks[0].start, 2)
+        XCTAssertEqual(all.marks[0].end, 160.0 / 60, accuracy: 0.0001)
+        XCTAssertNil(all.marks[1].start)
+        XCTAssertEqual(selected.marks.map(\.id), all.marks.map(\.id))
+        XCTAssertTrue(StrengthExerciseTimeline(session: session, movementID: UUID()).marks.isEmpty)
     }
 }

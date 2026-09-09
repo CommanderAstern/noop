@@ -137,6 +137,19 @@ or screenshot route is available in the published Release build.
 
 ## Heart rate and workout load
 
+The iPhone **More** tab has a dedicated **Strength Training** entry at the top.
+It opens the training hub or resumes the existing session without creating another workout.
+Live heart rate uses one panel with named zones, inclusive BPM ranges, a continuous
+bar, and the next zone boundary. All boundaries come from the current profile;
+fractional thresholds round upward to preserve whole-BPM classification. Closely
+spaced custom thresholds can omit bar labels to prevent overlap; the current range remains visible.
+
+Completed graphs have an optional **Zones** overlay with horizontal bands, names and
+BPM ranges. Its preference persists. Set intervals appear in a separate strip using
+the same chart time scale; completions with unknown starts remain dots. **Time in zones**
+shows names, ranges and recorded durations even when chart shading is off. Zone labels
+and duration totals refresh together from the same profile snapshot. No live HR graph is added.
+
 Completed summaries and history show completed sets, reps, and external volume load
 (completed reps times logged weight), plus an HR graph and average/peak HR. Volume
 load is not muscular strain; it excludes unlogged body mass and machine mechanics.
@@ -149,7 +162,7 @@ times. It breaks lines across gaps longer than one minute; a short or insufficie
 recording has no cardio score. Sync can later fill missing HR. Deleting the HR
 database removes the graph, while the separately stored lifting log remains.
 Completed summaries refresh every 15 seconds while visible to show later sync data.
-Select an exercise to highlight its recorded set intervals, or scrub the graph for
+Select an exercise to highlight its recorded set intervals in the strip, or scrub the graph for
 BPM and exercise context. Completions without starts use markers, not invented bands.
 Time in zones uses the current profile's custom boundaries when configured.
 The durable active session
